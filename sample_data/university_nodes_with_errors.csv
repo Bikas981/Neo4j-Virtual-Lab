@@ -1,0 +1,6 @@
+label,id,student_id,name,semester,course_id,credits
+Student,S001,S001,Aditi,4,,
+Student,S002,S002,Rahul,4,,
+Student,S002,S002,Duplicate Rahul,5,,
+Student,,,Missing Id,4,,
+Course,C101,,Database Management Systems,,C101,4

@@ -1,0 +1,19 @@
+label,id,member_id,name,membership_type,book_id,title,isbn,author_id,country,publisher_id,genre_id
+Member,MB01,MB01,Aditi,Student,,,,,,,
+Member,MB02,MB02,Rahul,Student,,,,,,,
+Member,MB03,MB03,Priya,Faculty,,,,,,,
+Member,MB04,MB04,Arjun,Student,,,,,,,
+Book,BK01,,,,BK01,Database System Concepts,978-0078022159,,,,
+Book,BK02,,,,BK02,Computer Networks,978-0132126953,,,,
+Book,BK03,,,,BK03,Artificial Intelligence: A Modern Approach,978-0134610993,,,,
+Book,BK04,,,,BK04,Graph Databases,978-1491930892,,,,
+Author,AU01,,Abraham Silberschatz,,,,,AU01,USA,,
+Author,AU02,,Andrew S. Tanenbaum,,,,,AU02,Netherlands,,
+Author,AU03,,Stuart Russell,,,,,AU03,UK,,
+Author,AU04,,Ian Robinson,,,,,AU04,UK,,
+Publisher,PB01,,McGraw-Hill,,,,,,,PB01,
+Publisher,PB02,,Pearson,,,,,,,PB02,
+Publisher,PB03,,O'Reilly Media,,,,,,,PB03,
+Genre,GN01,,Databases,,,,,,,,GN01
+Genre,GN02,,Networking,,,,,,,,GN02
+Genre,GN03,,Artificial Intelligence,,,,,,,,GN03

@@ -1,0 +1,11 @@
+# Virtual Lab: Knowledge Graph Schema Design & Neo4j Data Import
+# Install with:  pip install -r requirements.txt
+
+streamlit>=1.36          # the laboratory interface
+pandas>=2.0              # datasets, CSV import/export, result tables
+numpy>=1.24              # graph layout maths in graph_viz.py
+plotly>=5.18             # schema diagram, graph visualisation, bar charts
+fpdf2>=2.7               # PDF laboratory report
+neo4j>=5.14              # official Neo4j driver (optional at runtime:
+                         # without a reachable server the lab runs in
+                         # Local Simulation Mode)

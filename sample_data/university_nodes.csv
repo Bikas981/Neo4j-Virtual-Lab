@@ -1,0 +1,17 @@
+label,id,student_id,name,semester,course_id,credits,faculty_id,specialization,dept_id,project_id,title,domain
+Student,S001,S001,Aditi,4,,,,,,,,
+Student,S002,S002,Rahul,4,,,,,,,,
+Student,S003,S003,Priya,6,,,,,,,,
+Student,S004,S004,Arjun,6,,,,,,,,
+Student,S005,S005,Neha,4,,,,,,,,
+Course,C101,,Database Management Systems,,C101,4,,,,,,
+Course,C102,,Computer Networks,,C102,3,,,,,,
+Course,C103,,Artificial Intelligence,,C103,4,,,,,,
+Faculty,F001,,Dr. Sharma,,,,F001,Databases,,,,
+Faculty,F002,,Dr. Mehta,,,,F002,Computer Networks,,,,
+Faculty,F003,,Dr. Rao,,,,F003,Artificial Intelligence,,,,
+Department,D01,,Computer Engineering,,,,,,D01,,,
+Department,D02,,Information Technology,,,,,,D02,,,
+Project,P001,,,,,,,,,P001,Smart Campus,IoT
+Project,P002,,,,,,,,,P002,AI Chatbot,NLP
+Project,P003,,,,,,,,,P003,Library Management,Web

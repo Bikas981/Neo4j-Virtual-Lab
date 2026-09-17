@@ -1,0 +1,51 @@
+# Streamlit configuration for the virtual laboratory.
+#
+# The white + navy identity is defined here with Streamlit's own theme options,
+# so the application code stays free of custom CSS.
+
+[theme]
+base = "light"
+
+primaryColor = "#1B365D"              # navy: buttons, active tab, focus rings
+backgroundColor = "#FFFFFF"           # white page
+secondaryBackgroundColor = "#F3F6FB"  # palest navy tint: inputs, panels, code
+textColor = "#10233F"                 # near-navy ink
+linkColor = "#1B4E8C"
+
+borderColor = "#D8E0EC"               # soft navy-grey rules
+dataframeBorderColor = "#D8E0EC"
+dataframeHeaderBackgroundColor = "#EDF2F9"
+codeBackgroundColor = "#F3F6FB"
+showWidgetBorder = true
+
+baseRadius = "0.35rem"
+buttonRadius = "0.35rem"
+
+font = "sans-serif"
+headingFont = "sans-serif"
+
+# Status colours, kept muted so they sit calmly next to the navy.
+greenColor = "#1E7A4C"
+redColor = "#B3261E"
+orangeColor = "#B26A00"
+blueColor = "#1B4E8C"
+
+# Categorical colours for charts, opening on navy. This is the validated
+# colour-blind-safe order with the first slot swapped for the lab's navy.
+chartCategoricalColors = [
+    "#1B365D",
+    "#eb6834",
+    "#1baf7a",
+    "#eda100",
+    "#e87ba4",
+    "#008300",
+    "#4a3aa7",
+    "#e34948",
+]
+
+[client]
+# Hide the "Deploy" button - this is a teaching app, not a deployment target.
+toolbarMode = "minimal"
+
+[browser]
+gatherUsageStats = false

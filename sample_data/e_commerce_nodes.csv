@@ -1,0 +1,20 @@
+label,id,customer_id,name,city,order_id,order_date,amount,product_id,price,category_id,seller_id,rating
+Customer,CU01,CU01,Aditi,Mumbai,,,,,,,,
+Customer,CU02,CU02,Rahul,Pune,,,,,,,,
+Customer,CU03,CU03,Priya,Delhi,,,,,,,,
+Customer,CU04,CU04,Arjun,Mumbai,,,,,,,,
+Order,O1001,,,,O1001,2026-01-12,54990,,,,,
+Order,O1002,,,,O1002,2026-01-15,2499,,,,,
+Order,O1003,,,,O1003,2026-02-02,18990,,,,,
+Order,O1004,,,,O1004,2026-02-09,1299,,,,,
+Product,P01,,Laptop 14 inch,,,,,P01,54990,,,
+Product,P02,,Wireless Mouse,,,,,P02,1299,,,
+Product,P03,,Mechanical Keyboard,,,,,P03,2499,,,
+Product,P04,,Smartphone,,,,,P04,18990,,,
+Product,P05,,Running Shoes,,,,,P05,3499,,,
+Category,CAT1,,Electronics,,,,,,,CAT1,,
+Category,CAT2,,Accessories,,,,,,,CAT2,,
+Category,CAT3,,Footwear,,,,,,,CAT3,,
+Seller,SE1,,TechWorld,,,,,,,,SE1,4.5
+Seller,SE2,,GadgetHub,,,,,,,,SE2,4.1
+Seller,SE3,,SportsKart,,,,,,,,SE3,3.9

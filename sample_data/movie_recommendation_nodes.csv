@@ -1,0 +1,17 @@
+label,id,user_id,name,age,movie_id,title,year,actor_id,director_id,genre_id
+User,U01,U01,Aditi,22,,,,,,
+User,U02,U02,Rahul,25,,,,,,
+User,U03,U03,Priya,21,,,,,,
+User,U04,U04,Arjun,30,,,,,,
+Movie,M01,,,,M01,The Deep Field,2019,,,
+Movie,M02,,,,M02,Monsoon Lines,2021,,,
+Movie,M03,,,,M03,Circuit City,2023,,,
+Movie,M04,,,,M04,Paper Boats,2020,,,
+Actor,A01,,Kiran Desai,,,,,A01,,
+Actor,A02,,Meera Iyer,,,,,A02,,
+Actor,A03,,Vikram Nair,,,,,A03,,
+Director,D01,,Anand Kulkarni,,,,,,D01,
+Director,D02,,Sara Pillai,,,,,,D02,
+Genre,G01,,Science Fiction,,,,,,,G01
+Genre,G02,,Drama,,,,,,,G02
+Genre,G03,,Thriller,,,,,,,G03

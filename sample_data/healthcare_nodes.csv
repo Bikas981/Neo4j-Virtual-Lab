@@ -1,0 +1,16 @@
+label,id,patient_id,name,age,doctor_id,specialization,disease_id,category,medicine_id,dosage,hospital_id,city
+Patient,PT01,PT01,Aditi,34,,,,,,,,
+Patient,PT02,PT02,Rahul,51,,,,,,,,
+Patient,PT03,PT03,Priya,28,,,,,,,,
+Patient,PT04,PT04,Arjun,62,,,,,,,,
+Doctor,DR01,,Dr. Sharma,,DR01,Cardiology,,,,,,
+Doctor,DR02,,Dr. Mehta,,DR02,Endocrinology,,,,,,
+Doctor,DR03,,Dr. Rao,,DR03,General Medicine,,,,,,
+Disease,DI01,,Hypertension,,,,DI01,Cardiovascular,,,,
+Disease,DI02,,Type 2 Diabetes,,,,DI02,Metabolic,,,,
+Disease,DI03,,Asthma,,,,DI03,Respiratory,,,,
+Medicine,ME01,,Amlodipine,,,,,,ME01,5 mg,,
+Medicine,ME02,,Metformin,,,,,,ME02,500 mg,,
+Medicine,ME03,,Salbutamol,,,,,,ME03,100 mcg,,
+Hospital,HO01,,City General Hospital,,,,,,,,HO01,Mumbai
+Hospital,HO02,,Sunrise Medical Centre,,,,,,,,HO02,Pune
