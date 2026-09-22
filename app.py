@@ -39,7 +39,7 @@ from simulation_engine import (
     execute_cypher,
 )
 
-APP_TITLE = "Virtual Lab: Knowledge Graph Schema Design & Data Import"
+APP_TITLE = "Virtual Lab: Design a Knowledge Graph Schema and Import Data"
 APP_SUBTITLE = "Design, construct, import, query and analyze a domain-specific knowledge graph"
 
 SECTIONS = [

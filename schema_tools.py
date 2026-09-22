@@ -21,7 +21,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import pandas as pd
 
-from simulation_engine import InMemoryGraph, execute_script
+from simulation_engine import InMemoryGraph
 
 NODE_CSV_REQUIRED = ["label", "id"]
 REL_CSV_REQUIRED = ["source_id", "type", "target_id"]
