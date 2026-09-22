@@ -756,33 +756,21 @@ def render_simulation() -> None:
 
     tabs = st.tabs(
         [
-            "Domain & Data",
-            "Schema Designer",
-            "Schema Diagram",
-            "Data Import",
-            "Graph Query",
-            "Graph View",
+            "Schema Studio",
+            "Data Import & Graph View",
             "Logbook",
         ]
     )
 
     with tabs[0]:
-        render_domain_tab()
+        render_schema_studio_tab()
     with tabs[1]:
-        render_schema_designer()
+        render_data_import_and_graph_tab()
     with tabs[2]:
-        render_schema_graph()
-    with tabs[3]:
-        render_import_tab()
-    with tabs[4]:
-        render_query_tab()
-    with tabs[5]:
-        render_graph_tab()
-    with tabs[6]:
         render_logbook_tab()
 
 
-# ------------------------------------------------- Tab: Domain & Data
+# ------------------------------------------------- Tab 1: Schema Studio
 def _on_domain_change() -> None:
     """Switching domain reloads its schema, data and examples."""
     chosen = st.session_state.get("domain_select")
@@ -790,115 +778,133 @@ def _on_domain_change() -> None:
         load_domain(chosen)
 
 
-def render_domain_tab() -> None:
-    st.subheader("Domain selection")
+def render_schema_studio_tab() -> None:
+    st.subheader("Domain Selection & Schema Modeling")
     st.caption(
-        "Pick the domain you want to model. Changing the domain reloads its schema, "
-        "its sample dataset and its example queries, and clears the working graph."
+        "Select a target domain, define or customize node labels and relationship types, "
+        "and observe the live schema diagram update in real time."
     )
 
     names = domains.domain_names()
     st.selectbox(
-        "Domain",
+        "Selected Domain",
         names,
         index=names.index(st.session_state.domain) if st.session_state.domain in names else 0,
         key="domain_select",
         on_change=_on_domain_change,
     )
-
     domain = domains.get_domain(st.session_state.domain)
-    st.write(domain["description"])
-    st.info("**Identifying entities:** " + domain["entity_hint"])
+    st.markdown(f"**Domain Context:** {domain['description']}")
+    st.info("**Entity Guidance:** " + domain["entity_hint"])
 
     stats = active_stats()
     schema_node_count = len(st.session_state.schema.get("nodes", []))
-    col1, col2, col3, col4 = st.columns(4)
-    col1.metric("Domain", st.session_state.domain)
-    col2.metric(
-        "Schema Labels",
-        schema_node_count,
-        help="Node labels defined in this domain schema",
-    )
-    col3.metric(
-        "Nodes in Graph",
+    schema_rel_count = len(st.session_state.schema.get("relationships", []))
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("Domain", st.session_state.domain)
+    c2.metric("Schema Labels", schema_node_count, help="Node labels defined in this schema")
+    c3.metric("Relationship Types", schema_rel_count, help="Relationship types defined in this schema")
+    c4.metric(
+        "Nodes in Active Graph",
         stats["node_count"],
         delta="Imported" if stats["node_count"] > 0 else "Pending Import",
         delta_color="normal" if stats["node_count"] > 0 else "off",
         help="Nodes created in the active graph engine. Requires data import.",
     )
-    col4.metric(
-        "Relationships in Graph",
-        stats["relationship_count"],
-        delta="Imported" if stats["relationship_count"] > 0 else "Pending Import",
-        delta_color="normal" if stats["relationship_count"] > 0 else "off",
-        help="Relationships created in the active graph engine. Requires data import.",
-    )
 
     if stats["node_count"] == 0:
-        st.info(
-            "Note: The graph database is currently empty (0 nodes, 0 relationships) because "
-            "data has not been imported yet. To populate the graph with this domain's dataset, "
-            "go to the **Data Import** tab and click **'Import into the graph'**."
+        st.caption(
+            "Note: The graph database is currently empty (0 nodes). "
+            "After designing your schema below, switch to the **Data Import & Graph View** tab to ingest data."
         )
-    else:
-        st.success(
-            f"Active Graph: {stats['node_count']} nodes and {stats['relationship_count']} "
-            "relationships are currently loaded and ready for querying."
-        )
+
     st.divider()
+
+    # 2. NODE AND RELATIONSHIP SIDE BY SIDE (in the middle)
+    st.subheader("Schema Design: Entities & Relationships")
+    st.caption("Define node labels (entities) on the left and relationship types (connections) on the right.")
+
+    col_nodes, col_rels = st.columns([1, 1], gap="large")
+    with col_nodes:
+        render_node_labels_section()
+    with col_rels:
+        render_relationship_types_section()
+
+    # Schema Validation and actions right below the editor
+    st.divider()
+    st.markdown("#### Schema Validation & Actions")
+    schema = st.session_state.schema
+    errors, warnings = schema_tools.validate_schema(schema)
+    if errors:
+        st.session_state.schema_done = False
+        st.error(_bullet_block("%d problem(s) to fix" % len(errors), errors))
+    else:
+        st.session_state.schema_done = True
+        st.success(
+            "Schema is valid: %d node label(s) and %d relationship(s)."
+            % (len(schema["nodes"]), len(schema["relationships"]))
+        )
+    if warnings:
+        st.warning(_bullet_block("%d design note(s)" % len(warnings), warnings))
 
     col1, col2 = st.columns(2)
-    with col1:
-        st.markdown("**Entities (node labels) in this domain**")
-        st.dataframe(
-            pd.DataFrame(
-                [
-                    {
-                        "Node label": node["label"],
-                        "Unique ID": node["key"],
-                        "Properties": ", ".join(node["properties"]),
-                    }
-                    for node in domain["nodes"]
-                ]
-            ),
-            hide_index=True,
-            width="stretch",
-        )
-    with col2:
-        st.markdown("**Relationships in this domain**")
-        st.dataframe(
-            pd.DataFrame(
-                [
-                    {
-                        "Pattern": "%s --[%s]--> %s" % (rel["source"], rel["type"], rel["target"]),
-                        "Properties": ", ".join(rel["properties"]) or "-",
-                    }
-                    for rel in domain["relationships"]
-                ]
-            ),
-            hide_index=True,
-            width="stretch",
-        )
+    col1.button("Reset schema to domain default", on_click=_reset_schema)
+    col2.button("Clear the whole schema", on_click=_clear_schema)
 
     st.divider()
-    st.subheader("Sample dataset")
-    st.caption("Inspect the data before importing it. Every relationship below points at rows that really exist.")
 
-    frames = domains.label_frames(domain)
-    for label, frame in frames.items():
-        with st.expander("%s - %d row(s)" % (label, len(frame))):
-            st.dataframe(frame, hide_index=True, width="stretch")
+    # 3. GRAPH BELOW (Full-width Live Schema Diagram)
+    st.subheader("Live Schema Diagram")
+    st.caption(
+        "Interactive diagram generated from your active schema above. Updates automatically as you edit."
+    )
+    if errors:
+        st.warning(
+            "The schema has %d problem(s); the diagram shows only the parts that are "
+            "currently valid." % len(errors)
+        )
+    figure = graph_viz.schema_figure(schema, dark=is_dark_theme())
+    st.plotly_chart(figure, use_container_width=True, key="schema_chart")
 
-    with st.expander("Relationships - %d row(s)" % len(domain["edges"]), expanded=True):
+    col_t1, col_t2 = st.columns(2)
+    with col_t1:
+        st.markdown("**Entities (Node Labels) Defined**")
         st.dataframe(
-            domains.edges_dataframe(domains.dataset_from_domain(domain)),
+            pd.DataFrame(
+                [
+                    {
+                        "Node label": n["label"],
+                        "Unique ID": n.get("key") or "(none)",
+                        "Properties": ", ".join(n["properties"]) or "(none)",
+                    }
+                    for n in schema["nodes"]
+                ]
+            ),
             hide_index=True,
             width="stretch",
         )
-        st.caption(
-            "Every source_id and target_id above refers to a row in the tables "
-            "above it - that is what the validator checks before an import."
+    with col_t2:
+        st.markdown("**Relationships Defined**")
+        st.dataframe(
+            pd.DataFrame(
+                [
+                    {
+                        "Pattern": "%s --[%s]--> %s" % (r.get("source"), r.get("type"), r.get("target")),
+                        "Properties": ", ".join(r.get("properties", [])) or "-",
+                    }
+                    for r in schema["relationships"]
+                ]
+            ),
+            hide_index=True,
+            width="stretch",
         )
+
+
+
+
+def render_domain_tab() -> None:
+    """Backward compatibility alias."""
+    render_schema_studio_tab()
 
 
 
@@ -1003,39 +1009,23 @@ def _clear_schema() -> None:
     }
 
 
-def render_schema_designer() -> None:
-    st.subheader("Schema designer")
-    st.caption(
-        "Define the node labels, their properties and unique identifiers, then the "
-        "relationship types that connect them. The diagram, the data import and the "
-        "graph queries all follow whatever you design here."
-    )
-
+def render_node_labels_section() -> None:
+    st.markdown("### Node Labels (Entities)")
+    st.caption("Define the entities, their unique identifier key, and properties.")
     schema = st.session_state.schema
 
-    # ---- node labels ------------------------------------------------
-    st.markdown("### Node labels")
     if not schema["nodes"]:
         st.warning("No node labels defined. Add one below to begin.")
 
     for node in list(schema["nodes"]):
         node_id = node["_id"]
         with st.expander(":%s" % (node["label"] or "(unnamed)"), expanded=False):
-            col1, col2 = st.columns([1, 2])
+            col1, col2 = st.columns(2)
             with col1:
                 node["label"] = st.text_input(
                     "Node label", value=node["label"], key="nlabel_%s" % node_id
                 ).strip()
             with col2:
-                raw = st.text_input(
-                    "Properties (comma separated)",
-                    value=", ".join(node["properties"]),
-                    key="nprops_%s" % node_id,
-                )
-            node["properties"] = [p.strip() for p in raw.split(",") if p.strip()]
-
-            col3, col4 = st.columns([2, 1])
-            with col3:
                 options = node["properties"] or ["(define a property first)"]
                 current = node.get("key")
                 index = options.index(current) if current in options else 0
@@ -1048,31 +1038,39 @@ def render_schema_designer() -> None:
                 )
                 if node["key"] not in node["properties"]:
                     node["key"] = ""
-            with col4:
-                st.write("")
-                st.write("")
-                st.button(
-                    "Remove label",
-                    key="ndel_%s" % node_id,
-                    on_click=_remove_node,
-                    args=(node_id,),
-                )
+
+            raw = st.text_input(
+                "Properties (comma separated)",
+                value=", ".join(node["properties"]),
+                key="nprops_%s" % node_id,
+            )
+            node["properties"] = [p.strip() for p in raw.split(",") if p.strip()]
+
+            st.button(
+                "Remove label",
+                key="ndel_%s" % node_id,
+                on_click=_remove_node,
+                args=(node_id,),
+            )
 
     with st.form("add_node_form", clear_on_submit=True):
         st.markdown("**Add a node label**")
-        col1, col2, col3 = st.columns([1, 2, 1])
+        col1, col2 = st.columns(2)
         col1.text_input("Label", placeholder="Student", key="add_node_label")
-        col2.text_input(
+        col2.text_input("Unique ID property", placeholder="student_id", key="add_node_key")
+        st.text_input(
             "Properties (comma separated)",
             placeholder="student_id, name, semester",
             key="add_node_props",
         )
-        col3.text_input("Unique ID property", placeholder="student_id", key="add_node_key")
         st.form_submit_button("Add node label", type="primary", on_click=_add_node)
     _show_designer_message("node")
 
-    # ---- relationships ---------------------------------------------
-    st.markdown("### Relationship types")
+
+def render_relationship_types_section() -> None:
+    st.markdown("### Relationship Types")
+    st.caption("Connect entity types with typed, directed relationships.")
+    schema = st.session_state.schema
     labels = [n["label"] for n in schema["nodes"] if n["label"]]
 
     if not schema["relationships"]:
@@ -1086,89 +1084,80 @@ def render_schema_designer() -> None:
             rel.get("target") or "?",
         )
         with st.expander(title, expanded=False):
-            col1, col2, col3 = st.columns(3)
+            col1, col2 = st.columns(2)
             with col1:
                 rel["type"] = st.text_input(
                     "Relationship type", value=rel["type"], key="rtype_%s" % rel_id
                 ).strip()
-            # Keep a label the relationship already points at in the option
-            # list even if it has been deleted, so the dangling reference is
-            # preserved and reported instead of being silently rewired.
+            with col2:
+                raw = st.text_input(
+                    "Properties (comma separated)",
+                    value=", ".join(rel.get("properties", [])),
+                    key="rprops_%s" % rel_id,
+                )
+                rel["properties"] = [p.strip() for p in raw.split(",") if p.strip()]
+
             options = list(labels)
             for referenced in (rel.get("source"), rel.get("target")):
                 if referenced and referenced not in options:
                     options.append(referenced)
             if not options:
                 options = ["(no node labels yet)"]
-            with col2:
+
+            col3, col4 = st.columns(2)
+            with col3:
                 index = options.index(rel["source"]) if rel.get("source") in options else 0
                 rel["source"] = st.selectbox(
                     "Source node label", options, index=index, key="rsrc_%s" % rel_id
                 )
-            with col3:
+            with col4:
                 index = options.index(rel["target"]) if rel.get("target") in options else 0
                 rel["target"] = st.selectbox(
                     "Target node label", options, index=index, key="rtgt_%s" % rel_id
                 )
-            col4, col5 = st.columns([3, 1])
-            with col4:
-                raw = st.text_input(
-                    "Relationship properties (comma separated)",
-                    value=", ".join(rel.get("properties", [])),
-                    key="rprops_%s" % rel_id,
-                )
-                rel["properties"] = [p.strip() for p in raw.split(",") if p.strip()]
-            with col5:
-                st.write("")
-                st.write("")
-                st.button(
-                    "Remove",
-                    key="rdel_%s" % rel_id,
-                    on_click=_remove_relationship,
-                    args=(rel_id,),
-                )
+
+            st.button(
+                "Remove relationship",
+                key="rdel_%s" % rel_id,
+                on_click=_remove_relationship,
+                args=(rel_id,),
+            )
 
     with st.form("add_rel_form", clear_on_submit=True):
         st.markdown("**Add a relationship type**")
-        col1, col2, col3, col4 = st.columns(4)
+        col1, col2 = st.columns(2)
         col1.text_input("Type", placeholder="ENROLLED_IN", key="add_rel_type")
-        col2.selectbox(
+        col2.text_input("Properties", placeholder="grade", key="add_rel_props")
+        col3, col4 = st.columns(2)
+        col3.selectbox(
             "Source label", labels or ["(add a node label first)"], key="add_rel_source"
         )
-        col3.selectbox(
+        col4.selectbox(
             "Target label", labels or ["(add a node label first)"], key="add_rel_target"
         )
-        col4.text_input("Properties", placeholder="grade", key="add_rel_props")
         st.form_submit_button("Add relationship", type="primary", on_click=_add_relationship)
     _show_designer_message("rel")
 
-    # ---- validation -------------------------------------------------
-    st.divider()
-    st.markdown("#### Validation")
-    errors, warnings = schema_tools.validate_schema(schema)
-    if errors:
-        st.session_state.schema_done = False
-        st.error(_bullet_block("%d problem(s) to fix" % len(errors), errors))
-    else:
-        st.session_state.schema_done = True
-        st.success(
-            "Schema is valid: %d node label(s) and %d relationship(s)."
-            % (len(schema["nodes"]), len(schema["relationships"]))
-        )
-    if warnings:
-        st.warning(_bullet_block("%d design note(s)" % len(warnings), warnings))
 
-    col1, col2 = st.columns(2)
-    col1.button("Reset schema to the domain default", on_click=_reset_schema)
-    col2.button("Clear the whole schema", on_click=_clear_schema)
+def render_schema_designer_content() -> None:
+    """Side-by-side node and relationship sections."""
+    col_nodes, col_rels = st.columns([1, 1], gap="large")
+    with col_nodes:
+        render_node_labels_section()
+    with col_rels:
+        render_relationship_types_section()
 
 
-# ----------------------------------------------- Tab: Schema Diagram
-def render_schema_graph() -> None:
-    st.subheader("Schema diagram")
+def render_schema_designer() -> None:
+    """Backward compatibility alias."""
+    render_schema_designer_content()
+
+
+# ----------------------------------------------- Tab 1 (Right): Schema Diagram
+def render_schema_diagram_content() -> None:
+    st.subheader("Live Schema Diagram")
     st.caption(
-        "This diagram is generated from your schema on every change - edit the "
-        "designer and it redraws."
+        "Interactive diagram generated from your active schema. Updates automatically as you edit."
     )
     schema = st.session_state.schema
     errors, _ = schema_tools.validate_schema(schema)
@@ -1180,9 +1169,7 @@ def render_schema_graph() -> None:
     figure = graph_viz.schema_figure(schema, dark=is_dark_theme())
     st.plotly_chart(figure, use_container_width=True, key="schema_chart")
 
-    col1, col2 = st.columns(2)
-    with col1:
-        st.markdown("**Node labels and properties**")
+    with st.expander("Defined Node Labels & Keys", expanded=False):
         st.dataframe(
             pd.DataFrame(
                 [
@@ -1197,8 +1184,7 @@ def render_schema_graph() -> None:
             hide_index=True,
             width="stretch",
         )
-    with col2:
-        st.markdown("**Relationship types**")
+    with st.expander("Defined Relationship Types", expanded=False):
         st.dataframe(
             pd.DataFrame(
                 [
@@ -1212,6 +1198,11 @@ def render_schema_graph() -> None:
             hide_index=True,
             width="stretch",
         )
+
+
+def render_schema_graph() -> None:
+    """Backward compatibility alias."""
+    render_schema_diagram_content()
 
 
 # -------------------------------------------------- Tab: Data Import
@@ -1707,8 +1698,8 @@ def render_graph_tab() -> None:
 
     if node_count == 0:
         st.info(
-            "The graph is empty. Open the **Data Import** tab, validate the dataset "
-            "and import it, then come back here."
+            "The graph database is currently empty. Complete Step 3 above by clicking "
+            "**'Import into the graph'** to populate and view your graph network."
         )
         st.plotly_chart(
             graph_viz.instance_figure({"nodes": [], "relationships": []}, dark=is_dark_theme())[0],
@@ -1779,7 +1770,21 @@ def render_graph_tab() -> None:
         )
 
 
-# ------------------------------------------------------ Tab: Logbook
+# --------------------------------------------------- Tab 2: Data Import & Graph View
+def render_data_import_and_graph_tab() -> None:
+    st.subheader("Data Ingestion & Graph Creation")
+    st.caption(
+        "Load data, validate records against your schema, and import them into the graph. "
+        "The live graph network appears immediately below upon import."
+    )
+
+    render_import_tab()
+
+    st.divider()
+    render_graph_tab()
+
+
+# ------------------------------------------------------ Tab 3: Logbook
 def _clear_trials() -> None:
     st.session_state.trials = []
 
