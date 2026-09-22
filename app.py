@@ -25,6 +25,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import pandas as pd
 import streamlit as st
+import streamlit.components.v1 as components
 
 import domains
 import graph_viz
@@ -140,6 +141,11 @@ def init_state() -> None:
 
     if st.session_state.get("page") not in SECTIONS:
         st.session_state.page = SECTIONS[0]
+    if (
+        "nav_selection" not in st.session_state
+        or st.session_state.nav_selection not in SECTIONS
+    ):
+        st.session_state.nav_selection = st.session_state.page
 
     if "schema" not in st.session_state:
         load_domain(domains.DEFAULT_DOMAIN)
@@ -265,15 +271,16 @@ def _bullet_block(heading: str, messages: List[str], limit: int = 25) -> str:
 
 
 def _checklist(items: List[Tuple[str, bool]]) -> str:
-    """A plain tick/circle checklist -- one markdown block, no emoji noise."""
+    """A plain checklist -- one markdown block, no emoji noise."""
     return "  \n".join(
-        ("✓ &nbsp;%s" if done else "○ &nbsp;%s") % label for label, done in items
+        ("[x] %s" if done else "[ ] %s") % label for label, done in items
     )
 
 
 def _goto_section(section: str) -> None:
+    st.session_state.pending_nav = section
     st.session_state.page = section
-    st.session_state.nav_selection = section
+    st.rerun()
 
 
 def render_sidebar() -> None:
@@ -281,15 +288,13 @@ def render_sidebar() -> None:
     with st.sidebar:
         st.subheader("Lab Navigator")
 
-        current_index = (
-            SECTIONS.index(st.session_state.page)
-            if st.session_state.page in SECTIONS
-            else 0
-        )
-
-        if (
+        if "pending_nav" in st.session_state:
+            target = st.session_state.pop("pending_nav")
+            st.session_state.page = target
+            st.session_state.nav_selection = target
+        elif (
             "nav_selection" not in st.session_state
-            or st.session_state.nav_selection != st.session_state.page
+            or st.session_state.nav_selection not in SECTIONS
         ):
             st.session_state.nav_selection = st.session_state.page
 
@@ -299,13 +304,11 @@ def render_sidebar() -> None:
         selected = st.radio(
             "Lab Navigation",
             SECTIONS,
-            index=current_index,
             key="nav_selection",
             on_change=_handle_nav_change,
             label_visibility="collapsed",
         )
-        if selected != st.session_state.page:
-            st.session_state.page = selected
+        st.session_state.page = selected
 
         st.divider()
 
@@ -769,6 +772,24 @@ def render_simulation() -> None:
     with tabs[2]:
         render_logbook_tab()
 
+    st.divider()
+    col1, col2 = st.columns([1, 1])
+    with col1:
+        if st.button("Mark Simulation as Completed", type="primary", key="btn_mark_sim"):
+            st.session_state.schema_done = True
+            st.session_state.import_done = True
+            st.session_state.query_done = True
+            st.success("Simulation marked as complete! Proceed to the Quiz section.")
+        sim_done = (
+            st.session_state.get("schema_done")
+            and st.session_state.get("import_done")
+        )
+        if sim_done:
+            st.caption("[Done] Simulation is marked as completed.")
+    with col2:
+        if st.button("Proceed to Quiz", use_container_width=True, key="goto_quiz_from_sim"):
+            _goto_section("Quiz")
+
 
 # ------------------------------------------------- Tab 1: Schema Studio
 def _on_domain_change() -> None:
@@ -854,17 +875,33 @@ def render_schema_studio_tab() -> None:
     st.divider()
 
     # 3. GRAPH BELOW (Full-width Live Schema Diagram)
-    st.subheader("Live Schema Diagram")
-    st.caption(
-        "Interactive diagram generated from your active schema above. Updates automatically as you edit."
-    )
+    col_hdr, col_view = st.columns([3, 1])
+    with col_hdr:
+        st.subheader("Live Schema Diagram")
+        st.caption(
+            "Interactive diagram generated from your active schema above. Updates automatically as you edit."
+        )
+    with col_view:
+        schema_viz_mode = st.radio(
+            "Schema Visualizer",
+            ["Animated Flow", "Static Plotly"],
+            horizontal=True,
+            key="schema_viz_mode",
+            label_visibility="collapsed",
+        )
     if errors:
         st.warning(
             "The schema has %d problem(s); the diagram shows only the parts that are "
             "currently valid." % len(errors)
         )
-    figure = graph_viz.schema_figure(schema, dark=is_dark_theme())
-    st.plotly_chart(figure, use_container_width=True, key="schema_chart")
+    if schema_viz_mode == "Animated Flow":
+        html_code = graph_viz.animated_graph_html(
+            schema, dark=is_dark_theme(), height=520, mode="schema"
+        )
+        components.html(html_code, height=540)
+    else:
+        figure = graph_viz.schema_figure(schema, dark=is_dark_theme())
+        st.plotly_chart(figure, use_container_width=True, key="schema_chart")
 
     col_t1, col_t2 = st.columns(2)
     with col_t1:
@@ -1692,7 +1729,18 @@ def render_query_tab() -> None:
 
 # --------------------------------------------------- Tab: Graph View
 def render_graph_tab() -> None:
-    st.subheader("Graph visualization")
+    col_hdr, col_view = st.columns([3, 1])
+    with col_hdr:
+        st.subheader("Graph visualization")
+    with col_view:
+        inst_viz_mode = st.radio(
+            "Graph Visualizer",
+            ["Animated Flow", "Static Plotly"],
+            horizontal=True,
+            key="inst_viz_mode",
+            label_visibility="collapsed",
+        )
+
     snapshot = active_snapshot()
     node_count = len(snapshot["nodes"])
 
@@ -1729,7 +1777,26 @@ def render_graph_tab() -> None:
         show_edge_labels=show_edge_labels,
         show_captions=show_captions,
     )
-    st.plotly_chart(figure, use_container_width=True, key="instance_chart")
+
+    if inst_viz_mode == "Animated Flow":
+        filtered_snapshot = {
+            "nodes": [n for n in snapshot["nodes"] if n["label"] in label_filter],
+            "relationships": [
+                r for r in snapshot["relationships"]
+                if (not type_filter or r["type"] in type_filter)
+            ] if show_rels else [],
+        }
+        html_code = graph_viz.animated_graph_html(
+            filtered_snapshot,
+            dark=is_dark_theme(),
+            height=540,
+            mode="instance",
+            show_edge_labels=show_edge_labels,
+            show_captions=show_captions,
+        )
+        components.html(html_code, height=560)
+    else:
+        st.plotly_chart(figure, use_container_width=True, key="instance_chart")
     caption = "Showing %d of %d node(s) and %d of %d relationship(s) · source: %s" % (
         shown["nodes"],
         node_count,
@@ -1963,7 +2030,7 @@ def _render_quiz_result(result: Dict[str, Any]) -> None:
 
     st.subheader("Answer review")
     for index, detail in enumerate(result["details"], start=1):
-        mark = "✓" if detail["is_correct"] else "✗"
+        mark = "[Correct]" if detail["is_correct"] else "[Incorrect]"
         with st.expander(
             "%s  Q%d · %s — %s" % (mark, index, detail["level"], detail["question"])
         ):
@@ -1974,7 +2041,18 @@ def _render_quiz_result(result: Dict[str, Any]) -> None:
                 st.success("Correct answer: %s" % detail["correct_text"])
             st.caption("**Why:** %s" % detail["explanation"])
 
-    st.button("Retake Quiz", on_click=_retake_quiz)
+    st.divider()
+    col1, col2 = st.columns([1, 1])
+    with col1:
+        st.button("Retake Quiz", on_click=_retake_quiz, use_container_width=True)
+    with col2:
+        if st.button(
+            "Proceed to Report Generation",
+            type="primary",
+            use_container_width=True,
+            key="goto_report_from_quiz",
+        ):
+            _goto_section("Report Generation")
 
 
 # ======================================================================
@@ -2069,12 +2147,22 @@ def render_report() -> None:
             mime="application/pdf",
             type="primary",
         )
-        st.divider()
-        c_info, c_btn = st.columns([3, 1])
-        c_info.success("Report generated successfully! You are now eligible to claim your Certificate of Completion.")
-        if c_btn.button("Proceed to Certificate", type="primary", use_container_width=True, key="goto_cert_from_report"):
+
+    st.divider()
+    col_a, col_b = st.columns([1, 1])
+    with col_a:
+        if st.session_state.report_bytes:
+            st.caption("[Done] PDF report generated and ready for submission.")
+        else:
+            st.caption("Generate your PDF laboratory report to record experimental results.")
+    with col_b:
+        if st.button(
+            "Proceed to Certificate",
+            type="primary" if st.session_state.report_bytes else "secondary",
+            use_container_width=True,
+            key="goto_cert_from_report",
+        ):
             _goto_section("Certificate")
-            st.rerun()
 
 
 # ======================================================================
@@ -2365,7 +2453,12 @@ def render_references() -> None:
         )
 
     st.divider()
-    st.caption("You have reached the end of the virtual laboratory curriculum. Review your report in Report Generation or download your Certificate!")
+    col1, col2 = st.columns([1, 1])
+    with col1:
+        st.caption("You have reached the end of the virtual laboratory curriculum. Review your report in Report Generation or download your Certificate!")
+    with col2:
+        if st.button("Return to Purpose / Overview", use_container_width=True, key="goto_purpose_from_refs"):
+            _goto_section("Purpose")
 
 
 # ======================================================================
