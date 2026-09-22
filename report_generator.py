@@ -665,3 +665,222 @@ def _render(context: Dict[str, Any]) -> LabReport:
     pdf.ln(2)
     pdf._line_text("Signature of Faculty: ______________________        Grade: _____________")
     return pdf
+
+
+# ======================================================================
+#  Certificate of Completion
+# ======================================================================
+GOLD = (180, 140, 50)
+
+
+class LabCertificate(FPDF):
+    """An official landscape A4 Certificate of Lab Completion."""
+
+    def __init__(self) -> None:
+        super().__init__(orientation="L", unit="mm", format="A4")
+        self.set_auto_page_break(auto=False)
+        self.set_margins(12, 12, 12)
+        self.set_title("Virtual Laboratory Certificate of Completion")
+
+    def draw_frames(self) -> None:
+        """Draw an elegant double border with decorative corner accents."""
+        # Outer border
+        self.set_draw_color(*ACCENT)
+        self.set_line_width(1.4)
+        self.rect(8, 8, 281, 194)
+
+        # Inner gold border
+        self.set_draw_color(*GOLD)
+        self.set_line_width(0.6)
+        self.rect(11, 11, 275, 188)
+
+        # Corner geometric accents
+        self.set_fill_color(*ACCENT)
+        for x in (11, 281):
+            for y in (11, 194):
+                self.rect(x, y, 5, 5, style="F")
+
+    def _line_text(self, text: str, align: str = "C") -> None:
+        if _HAS_ENUMS:
+            self.cell(0, 6, _safe(text), align=align, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+        else:  # pragma: no cover
+            self.cell(0, 6, _safe(text), ln=1, align=align)
+
+
+def _render_certificate(context: Dict[str, Any]) -> LabCertificate:
+    student = context.get("student", {})
+    observations = context.get("observations", {})
+    quiz = context.get("quiz")
+    cert_id = context.get("cert_id") or "VLAB-KG-9-%s" % (
+        (student.get("roll") or "EXP9")[:6].replace(" ", "").upper()
+    )
+
+    pdf = LabCertificate()
+    pdf.add_page()
+    pdf.draw_frames()
+
+    # 1. Masthead
+    pdf.set_y(17)
+    pdf.set_font("Helvetica", "B", 10.5)
+    pdf.set_text_color(*MUTED)
+    pdf._line_text("VIRTUAL LABORATORIES PROJECT · MINISTRY OF EDUCATION")
+    pdf.set_font("Helvetica", "", 9)
+    pdf.set_text_color(*MUTED)
+    pdf._line_text("National Knowledge Graph Systems & Graph Databases Laboratory")
+
+    # 2. Title
+    pdf.ln(3)
+    pdf.set_font("Helvetica", "B", 23)
+    pdf.set_text_color(*ACCENT)
+    pdf._line_text("CERTIFICATE OF LAB COMPLETION")
+
+    # 3. Awarded to
+    pdf.ln(1)
+    pdf.set_font("Helvetica", "I", 11)
+    pdf.set_text_color(*MUTED)
+    pdf._line_text("This is to proudly certify that")
+
+    # 4. Student Name
+    pdf.ln(2)
+    student_name = (student.get("name") or "Student").strip().title()
+    pdf.set_font("Helvetica", "B", 20)
+    pdf.set_text_color(*INK)
+    pdf._line_text(student_name)
+
+    # Decorative underline
+    name_w = min(160, max(80, pdf.get_string_width(_safe(student_name)) + 20))
+    start_x = (297 - name_w) / 2
+    pdf.set_draw_color(*GOLD)
+    pdf.set_line_width(0.8)
+    pdf.line(start_x, pdf.get_y(), start_x + name_w, pdf.get_y())
+    pdf.ln(3)
+
+    # 5. Student details
+    roll = student.get("roll") or "Enrolled Student"
+    dept = student.get("department") or "Computer Science & Engineering"
+    sem = student.get("semester") or "Semester IV"
+    pdf.set_font("Helvetica", "", 10)
+    pdf.set_text_color(*MUTED)
+    pdf._line_text(f"Roll No: {roll}   |   Department: {dept}   |   {sem}")
+
+    # 6. Citation text
+    pdf.ln(3)
+    pdf.set_font("Helvetica", "", 10.5)
+    pdf.set_text_color(*INK)
+    citation = (
+        "has successfully demonstrated practical competency in designing a domain-specific "
+        "Knowledge Graph schema, validating and importing structured entity-relationship data into "
+        "the in-memory simulation engine, executing graph traversal queries, and completing all requirements for:"
+    )
+    pdf.set_x(30)
+    pdf.multi_cell(237, 5.0, _safe(citation), align="C")
+
+    pdf.ln(2)
+    pdf.set_font("Helvetica", "B", 13)
+    pdf.set_text_color(*ACCENT)
+    pdf._line_text(f"{EXPERIMENT_NUMBER}: {EXPERIMENT_TITLE}")
+
+    # 7. Summary metrics box
+    pdf.ln(3)
+    box_y = pdf.get_y()
+    pdf.set_fill_color(*BOX)
+    pdf.set_draw_color(*RULE)
+    pdf.set_line_width(0.4)
+    pdf.rect(32, box_y, 233, 17, style="DF")
+
+    domain_name = context.get("domain") or "University"
+    nodes_cnt = observations.get("node_count", 0)
+    rels_cnt = observations.get("relationship_count", 0)
+    quiz_str = (
+        f"{quiz['correct']}/{quiz['total']} ({quiz['percentage']:.0f}%)"
+        if quiz
+        else "Completed"
+    )
+
+    pdf.set_y(box_y + 2.5)
+    pdf.set_font("Helvetica", "B", 9)
+    pdf.set_text_color(*MUTED)
+    cols = [
+        ("DOMAIN", domain_name),
+        ("GRAPH NODES", str(nodes_cnt)),
+        ("RELATIONSHIPS", str(rels_cnt)),
+        ("ASSESSMENT SCORE", quiz_str),
+    ]
+    col_w = 233 / len(cols)
+    for i, (label, val) in enumerate(cols):
+        cx = 32 + i * col_w
+        pdf.set_xy(cx, box_y + 2)
+        pdf.set_font("Helvetica", "B", 8)
+        pdf.set_text_color(*MUTED)
+        pdf.cell(col_w, 4.5, _safe(label), align="C")
+        pdf.set_xy(cx, box_y + 7.5)
+        pdf.set_font("Helvetica", "B", 10.5)
+        pdf.set_text_color(*ACCENT)
+        pdf.cell(col_w, 6, _safe(val), align="C")
+
+    # 8. Signatures and verification footer
+    footer_y = 158
+
+    # Left: Evaluation Engine
+    pdf.set_xy(32, footer_y)
+    pdf.set_font("Helvetica", "I", 9.5)
+    pdf.set_text_color(*INK)
+    pdf.cell(65, 5, _safe("Automated Simulation Engine"), align="C")
+    pdf.set_xy(32, footer_y + 5)
+    pdf.set_draw_color(*RULE)
+    pdf.line(35, footer_y + 5, 95, footer_y + 5)
+    pdf.set_xy(32, footer_y + 6)
+    pdf.set_font("Helvetica", "", 8)
+    pdf.set_text_color(*MUTED)
+    pdf.cell(65, 4.5, _safe("Virtual Lab Evaluator"), align="C")
+
+    # Center: Ornate Seal Badge
+    seal_x, seal_y = 148.5, footer_y + 4
+    pdf.set_draw_color(*GOLD)
+    pdf.set_fill_color(253, 250, 242)
+    pdf.set_line_width(0.8)
+    pdf.ellipse(seal_x - 12, seal_y - 12, 24, 24, style="DF")
+    pdf.set_draw_color(*GOLD)
+    pdf.set_line_width(0.3)
+    pdf.ellipse(seal_x - 10, seal_y - 10, 20, 20, style="D")
+    pdf.set_xy(seal_x - 11, seal_y - 4)
+    pdf.set_font("Helvetica", "B", 6.5)
+    pdf.set_text_color(*GOLD)
+    pdf.cell(22, 3.5, _safe("VERIFIED"), align="C")
+    pdf.set_xy(seal_x - 11, seal_y)
+    pdf.set_font("Helvetica", "B", 6)
+    pdf.cell(22, 3.5, _safe("VLAB EVAL"), align="C")
+
+    # Right: Course Coordinator
+    pdf.set_xy(200, footer_y)
+    pdf.set_font("Helvetica", "I", 9.5)
+    pdf.set_text_color(*INK)
+    pdf.cell(65, 5, _safe("Course Faculty Coordinator"), align="C")
+    pdf.set_xy(200, footer_y + 5)
+    pdf.set_draw_color(*RULE)
+    pdf.line(202, footer_y + 5, 262, footer_y + 5)
+    pdf.set_xy(200, footer_y + 6)
+    pdf.set_font("Helvetica", "", 8)
+    pdf.set_text_color(*MUTED)
+    pdf.cell(65, 4.5, _safe("Department of CSE"), align="C")
+
+    # Bottom line: Cert ID and Date
+    issue_date = student.get("date") or date.today().isoformat()
+    pdf.set_xy(15, 185)
+    pdf.set_font("Helvetica", "", 8)
+    pdf.set_text_color(*MUTED)
+    cert_text = f"Certificate ID: {cert_id}   ·   Issued On: {issue_date}   ·   Verify at: virtual-labs.ac.in"
+    pdf.cell(267, 5, _safe(cert_text), align="C")
+
+    return pdf
+
+
+def build_certificate(context: Dict[str, Any]) -> Tuple[Optional[bytes], Optional[str]]:
+    """Render the Certificate of Lab Completion. Returns (pdf_bytes, error_message)."""
+    try:
+        pdf = _render_certificate(context)
+        output = pdf.output()
+        return bytes(output), None
+    except Exception as exc:  # pragma: no cover - defensive
+        return None, "%s: %s" % (type(exc).__name__, exc)
+

@@ -41,24 +41,31 @@ from simulation_engine import (
 APP_TITLE = "Virtual Lab: Knowledge Graph Schema Design & Data Import"
 APP_SUBTITLE = "Design, construct, import, query and analyze a domain-specific knowledge graph"
 
-# Note the separator: a label like "1. Theory" would be parsed as a Markdown
-# ordered list and lose its number, so the number is joined with a middot.
-SECTIONS = ["1 · Theory", "2 · Simulation", "3 · Quiz", "4 · Report Generation"]
+SECTIONS = [
+    "Purpose",
+    "Theory",
+    "Simulation",
+    "Quiz",
+    "Report Generation",
+    "Certificate",
+    "References",
+]
 
 PROGRESS_STEPS = [
+    ("purpose_done", "Purpose"),
     ("theory_done", "Theory"),
     ("schema_done", "Schema Design"),
     ("import_done", "Data Import"),
     ("query_done", "Query Execution"),
     ("quiz_done", "Quiz"),
     ("report_done", "Report"),
+    ("certificate_done", "Certificate"),
 ]
 
 st.set_page_config(
     page_title="KG Virtual Lab",
-    page_icon="🔗",
     layout="wide",
-    initial_sidebar_state="collapsed",
+    initial_sidebar_state="expanded",
 )
 
 
@@ -95,12 +102,14 @@ def load_domain(domain_name: str) -> None:
 def init_state() -> None:
     defaults = {
         "page": SECTIONS[0],
+        "purpose_done": False,
         "theory_done": False,
         "schema_done": False,
         "import_done": False,
         "query_done": False,
         "quiz_done": False,
         "report_done": False,
+        "certificate_done": False,
         "query_history": [],
         "trials": [],
         "quiz_answers": {},
@@ -114,6 +123,8 @@ def init_state() -> None:
         "last_result": None,
         "report_bytes": None,
         "report_error": None,
+        "certificate_bytes": None,
+        "certificate_error": None,
         "conclusion": "",
         "student": {
             "name": "",
@@ -126,6 +137,9 @@ def init_state() -> None:
     for key, value in defaults.items():
         if key not in st.session_state:
             st.session_state[key] = value
+
+    if st.session_state.get("page") not in SECTIONS:
+        st.session_state.page = SECTIONS[0]
 
     if "schema" not in st.session_state:
         load_domain(domains.DEFAULT_DOMAIN)
@@ -259,14 +273,61 @@ def _checklist(items: List[Tuple[str, bool]]) -> str:
 
 def _goto_section(section: str) -> None:
     st.session_state.page = section
+    st.session_state.nav_selection = section
 
 
-def render_topbar() -> None:
-    """Masthead, section navigation and lab status -- all across the top.
+def render_sidebar() -> None:
+    """Left sidebar navigation with Lab Navigator heading and Progress Tracker."""
+    with st.sidebar:
+        st.subheader("Lab Navigator")
 
-    There is no sidebar: nothing is written to ``st.sidebar``, so Streamlit does
-    not render one at all.
-    """
+        current_index = (
+            SECTIONS.index(st.session_state.page)
+            if st.session_state.page in SECTIONS
+            else 0
+        )
+
+        if (
+            "nav_selection" not in st.session_state
+            or st.session_state.nav_selection != st.session_state.page
+        ):
+            st.session_state.nav_selection = st.session_state.page
+
+        def _handle_nav_change():
+            st.session_state.page = st.session_state.nav_selection
+
+        selected = st.radio(
+            "Lab Navigation",
+            SECTIONS,
+            index=current_index,
+            key="nav_selection",
+            on_change=_handle_nav_change,
+            label_visibility="collapsed",
+        )
+        if selected != st.session_state.page:
+            st.session_state.page = selected
+
+        st.divider()
+
+        # Progress Tracker
+        st.markdown("**Progress Tracker**")
+        steps = [
+            (key, label, bool(st.session_state.get(key)))
+            for key, label in PROGRESS_STEPS
+        ]
+        done = sum(1 for _, _, complete in steps if complete)
+        pct = done / len(steps)
+        st.progress(pct)
+        st.caption(f"{done} of {len(steps)} stages complete ({int(pct * 100)}%)")
+
+        with st.expander("Milestones", expanded=False):
+            for _, label, complete in steps:
+                status_mark = "[x]" if complete else "[ ]"
+                st.markdown(f"`{status_mark}` {label}")
+
+
+def render_main_header() -> None:
+    """Header across the top of the main content area."""
     title_col, status_col = st.columns([3, 1], vertical_alignment="center")
     with title_col:
         st.title(APP_TITLE)
@@ -274,36 +335,120 @@ def render_topbar() -> None:
     with status_col:
         st.info("**Mode:** Local Simulation")
         st.caption("Built-in simulation engine.")
-
-    # Navigation bar: one full-width button per section, the active one filled.
-    # (A segmented control would look the same but cannot be driven by
-    # Streamlit's AppTest harness in this version, which would cost the whole
-    # regression suite.)
-    nav_columns = st.columns(len(SECTIONS), gap="small")
-    for column, section in zip(nav_columns, SECTIONS):
-        column.button(
-            section,
-            key="nav_%s" % section.split("·")[0].strip(),
-            type="primary" if st.session_state.page == section else "secondary",
-            width="stretch",
-            on_click=_goto_section,
-            args=(section,),
-        )
-
-    steps = [(label, bool(st.session_state.get(key))) for key, label in PROGRESS_STEPS]
-    done = sum(1 for _, complete in steps if complete)
-    with st.expander("Progress tracker — %d of %d stages complete" % (done, len(steps))):
-        st.progress(done / len(steps))
-        columns = st.columns(len(steps))
-        for column, (label, complete) in zip(columns, steps):
-            column.markdown(("✓ &nbsp;**%s**" if complete else "○ &nbsp;%s") % label)
-            column.caption("Complete" if complete else "Pending")
-
     st.divider()
 
 
 # ======================================================================
-#  1. THEORY
+#  1. PURPOSE
+# ======================================================================
+def render_purpose() -> None:
+    st.header("Purpose & Learning Objectives")
+    st.caption("Overview, aims, competencies, and experimental roadmap for Experiment 9.")
+
+    col1, col2, col3 = st.columns(3)
+    col1.metric("Model", "Property Graph", help="Labeled Property Graph (LPG) model")
+    col2.metric("Engine", "In-Memory Simulation", help="Zero-install embedded local graph simulation")
+    col3.metric("Key Competency", "Schema & Ingestion", help="Entity-relationship translation to graph topology")
+
+    st.subheader("1. Experiment Aim & Context")
+    st.markdown(
+        """
+**Aim:** To design a domain-specific Knowledge Graph schema using the **Labeled Property Graph (LPG)** model,
+validate and import structured tabular entity-relationship data into an in-memory graph engine, execute traversal
+queries, and analyze network topology and connectivity patterns.
+
+**Why Knowledge Graphs?**  
+Traditional relational databases organize information into rigid, flat tables joined dynamically at query time using foreign keys.
+When data exhibits rich, multi-hop interconnectedness (e.g. academic networks, healthcare interactions, recommendation systems, or enterprise knowledge silos),
+relational queries incur severe combinatorial join penalties.
+
+In contrast, **Knowledge Graphs** store entities as **nodes** and connections as first-class **relationships** carrying their own types,
+directions, and properties. Because relationships are indexed directly on the nodes they connect, traversing a relationship is a local pointer-chasing operation
+independent of the total database size.
+        """
+    )
+
+    st.subheader("2. Learning Objectives")
+    st.markdown("Upon successful completion of this virtual laboratory experiment, students will be able to:")
+    obj_cols = st.columns(2)
+    for idx, obj in enumerate(report_generator.LEARNING_OBJECTIVES, start=1):
+        target_col = obj_cols[0] if idx <= 5 else obj_cols[1]
+        with target_col:
+            st.markdown(f"**{idx}.** {obj}")
+
+    st.subheader("3. Experimental Procedure Roadmap")
+    st.markdown("Follow this systematic 5-phase procedure through the virtual lab workflow:")
+
+    phases = [
+        (
+            "Phase I: Foundational Concepts",
+            [
+                "Study the theory of knowledge graphs, nodes, labels, and property graph representations.",
+                "Understand the trade-offs between relational database tables and graph databases.",
+            ],
+        ),
+        (
+            "Phase II: Domain Selection & Schema Design",
+            [
+                "Select an academic or industry domain (University, Healthcare, E-Commerce, Movies, Library).",
+                "Identify entities (nouns) and define distinct node labels with unique identifier keys.",
+                "Identify relationships (verbs) and define directed types with appropriate properties.",
+                "Use the visual Schema Designer and interactive Schema Diagram to validate model integrity.",
+            ],
+        ),
+        (
+            "Phase III: Data Validation & Ingestion",
+            [
+                "Inspect structured tabular datasets (nodes.csv and relationships.csv).",
+                "Perform automated integrity validation (checking for missing headers, duplicate keys, orphaned relations).",
+                "Execute a two-pass data import into the built-in in-memory simulation engine.",
+            ],
+        ),
+        (
+            "Phase IV: Graph Traversal & Analysis",
+            [
+                "Execute graph queries to retrieve entities, filter by properties, and traverse multi-hop connections.",
+                "Analyze interactive network topology visualizations using graph filters.",
+                "Record experimental trials and observations in the Experimental Data Logbook.",
+            ],
+        ),
+        (
+            "Phase V: Assessment, Reporting & Certification",
+            [
+                "Complete the 15-question comprehensive assessment quiz across Basic, Intermediate, and Advanced tiers.",
+                "Generate and download the formal 13-section laboratory PDF report.",
+                "Earn and download the verified landscape Certificate of Lab Completion.",
+            ],
+        ),
+    ]
+
+    for title, steps in phases:
+        with st.expander(title, expanded=True):
+            for step in steps:
+                st.markdown(f"- {step}")
+
+    st.subheader("4. Target Audience & Prerequisites")
+    st.info(
+        "**Prerequisites:** Basic knowledge of database concepts (tables, primary/foreign keys) and basic familiarity with CSV file formats. "
+        "No prior graph database or query language experience is required."
+    )
+
+    st.divider()
+    col_a, col_b = st.columns([1, 1])
+    with col_a:
+        if st.button("Mark Purpose as Reviewed", type="primary", key="mark_purpose_done"):
+            st.session_state.purpose_done = True
+            st.success("Purpose marked as reviewed! You can now proceed to Theory.")
+        if st.session_state.purpose_done:
+            st.caption("[Done] Purpose is marked as reviewed.")
+    with col_b:
+        if st.button("Proceed to Theory", use_container_width=True, key="goto_theory_from_purpose"):
+            _goto_section("Theory")
+            st.rerun()
+
+
+# ======================================================================
+#  2. THEORY
 # ======================================================================
 def render_theory() -> None:
     st.header("Theory")
@@ -316,7 +461,6 @@ def render_theory() -> None:
             "Schema Design",
             "Design Principles",
             "Data Import",
-            "Objectives & Procedure",
         ]
     )
 
@@ -590,22 +734,18 @@ relationship would have nothing to connect.
             "are the three faults that most often corrupt a graph."
         )
 
-    with tabs[5]:
-        st.subheader("Learning Objectives")
-        st.markdown("By the end of the experiment, students should be able to:")
-        for index, objective in enumerate(report_generator.LEARNING_OBJECTIVES, start=1):
-            st.markdown("%d. %s" % (index, objective))
-
-        st.subheader("Experimental Procedure")
-        for index, step in enumerate(report_generator.PROCEDURE_STEPS, start=1):
-            st.markdown("**Step %d:** %s" % (index, step))
-
-        st.divider()
-        if st.button("Mark theory as studied", type="primary"):
+    st.divider()
+    col1, col2 = st.columns([1, 1])
+    with col1:
+        if st.button("Mark theory as studied", type="primary", key="btn_mark_theory"):
             st.session_state.theory_done = True
-            st.success("Theory marked as complete. Move on to the Simulation section.")
+            st.success("Theory marked as complete! Proceed to the Simulation section.")
         if st.session_state.theory_done:
-            st.caption("Theory is marked complete in your progress tracker.")
+            st.caption("[Done] Theory is marked as studied.")
+    with col2:
+        if st.button("Proceed to Simulation", use_container_width=True, key="goto_sim_from_theory"):
+            _goto_section("Simulation")
+            st.rerun()
 
 
 # ======================================================================
@@ -1907,6 +2047,303 @@ def render_report() -> None:
             mime="application/pdf",
             type="primary",
         )
+        st.divider()
+        c_info, c_btn = st.columns([3, 1])
+        c_info.success("Report generated successfully! You are now eligible to claim your Certificate of Completion.")
+        if c_btn.button("Proceed to Certificate", type="primary", use_container_width=True, key="goto_cert_from_report"):
+            _goto_section("Certificate")
+            st.rerun()
+
+
+# ======================================================================
+#  6. CERTIFICATE
+# ======================================================================
+def render_certificate() -> None:
+    st.header("Certificate of Completion")
+    st.caption("Official verified Certificate of Completion for Experiment 9.")
+
+    student = st.session_state.student
+    data = observations()
+    quiz = st.session_state.quiz_result
+    has_name = bool((student.get("name") or "").strip())
+    has_imported = bool(st.session_state.import_done or data["node_count"] > 0)
+    has_quiz = quiz is not None
+    quiz_passed = has_quiz and (quiz.get("percentage", 0.0) >= 50.0)
+
+    # Completion indicators
+    st.subheader("Laboratory Completion Status")
+    chk_cols = st.columns(4)
+    chk_cols[0].metric(
+        "Student Profile",
+        "Complete" if has_name else "Missing",
+        delta="OK" if has_name else "Action required",
+    )
+    chk_cols[1].metric(
+        "Data Ingestion",
+        f"{data['node_count']} nodes" if has_imported else "Pending",
+        delta="OK" if has_imported else "Action required",
+    )
+    chk_cols[2].metric(
+        "Assessment",
+        f"{quiz['percentage']:.0f}%" if has_quiz else "Pending",
+        delta="Passed" if quiz_passed else ("Pending" if not has_quiz else "Retake advised"),
+    )
+    chk_cols[3].metric(
+        "Lab Report",
+        "Generated" if st.session_state.report_done else "Pending",
+        delta="OK" if st.session_state.report_done else "Recommended",
+    )
+
+    if not has_name:
+        st.warning("Please provide your name and academic details to personalize your certificate:")
+        with st.form("cert_student_form"):
+            c1, c2 = st.columns(2)
+            c_name = c1.text_input("Full Name", value=student.get("name", ""))
+            c_roll = c2.text_input("Roll No / Student ID", value=student.get("roll", ""))
+            c3, c4 = st.columns(2)
+            c_dept = c3.text_input(
+                "Department", value=student.get("department", "Computer Science & Engineering")
+            )
+            c_sem = c4.text_input("Semester", value=student.get("semester", "Semester IV"))
+            if st.form_submit_button("Save Student Details", type="primary"):
+                st.session_state.student["name"] = c_name
+                st.session_state.student["roll"] = c_roll
+                st.session_state.student["department"] = c_dept
+                st.session_state.student["semester"] = c_sem
+                st.success("Details saved! Refreshing certificate...")
+                st.rerun()
+
+    if not has_quiz:
+        st.info("Tip: To validate your subject mastery, complete the quiz in the Quiz section.")
+        if st.button("Go to Quiz", key="goto_quiz_from_cert"):
+            _goto_section("Quiz")
+            st.rerun()
+
+    st.divider()
+
+    # Visual Certificate Preview
+    cert_id = f"VLAB-KG-9-{(student.get('roll') or 'EXP9')[:6].replace(' ', '').upper()}"
+    student_display_name = (student.get("name") or "Enrolled Student").strip().title()
+
+    st.subheader("Official Certificate Preview")
+
+    # Render a stylized container simulating the certificate
+    with st.container(border=True):
+        quiz_summary_text = (
+            f"{quiz['correct']}/{quiz['total']} ({quiz['percentage']:.0f}%)"
+            if quiz
+            else "Completed"
+        )
+        st.markdown(
+            f"""
+            <div style="text-align: center; padding: 25px; border: 3px double #1B365D; border-radius: 8px; background-color: #FAFCFF;">
+                <p style="letter-spacing: 2px; font-size: 13px; color: #5E6C82; margin-bottom: 2px; text-transform: uppercase;">
+                    Virtual Laboratories Project · Ministry of Education
+                </p>
+                <p style="font-size: 11px; color: #5E6C82; margin-top: 0px;">
+                    National Knowledge Graph Systems & Graph Databases Laboratory
+                </p>
+                <h1 style="color: #1B365D; font-size: 28px; margin: 15px 0 5px 0; font-family: serif; letter-spacing: 1px;">
+                    CERTIFICATE OF LAB COMPLETION
+                </h1>
+                <p style="font-style: italic; color: #5E6C82; font-size: 14px; margin: 0 0 10px 0;">
+                    This is to proudly certify that
+                </p>
+                <h2 style="color: #10233F; font-size: 24px; margin: 5px 0 2px 0; text-decoration: underline; text-decoration-color: #B48C32;">
+                    {student_display_name}
+                </h2>
+                <p style="color: #5E6C82; font-size: 13px; margin: 5px 0 15px 0;">
+                    Roll No: <strong>{student.get('roll') or 'N/A'}</strong> &nbsp;|&nbsp; 
+                    Department: <strong>{student.get('department') or 'CSE'}</strong> &nbsp;|&nbsp; 
+                    <strong>{student.get('semester') or 'Semester IV'}</strong>
+                </p>
+                <p style="color: #10233F; font-size: 14px; max-width: 750px; margin: 0 auto 15px auto; line-height: 1.6;">
+                    has successfully demonstrated practical competency in designing a domain-specific Knowledge Graph schema,
+                    validating and importing structured entity-relationship data into the simulation engine,
+                    executing graph traversal queries, and completing all requirements for:
+                </p>
+                <h3 style="color: #1B365D; font-size: 17px; margin: 10px 0 20px 0;">
+                    Experiment 9: Knowledge Graph Schema Design & Data Import
+                </h3>
+                <div style="display: flex; justify-content: space-around; max-width: 600px; margin: 0 auto 20px auto; padding: 10px; background-color: #F3F6FB; border: 1px solid #D8E0EC; border-radius: 5px;">
+                    <div><span style="font-size: 11px; color: #5E6C82; font-weight: bold;">DOMAIN</span><br><strong style="color: #1B365D;">{st.session_state.domain}</strong></div>
+                    <div><span style="font-size: 11px; color: #5E6C82; font-weight: bold;">NODES</span><br><strong style="color: #1B365D;">{data['node_count']}</strong></div>
+                    <div><span style="font-size: 11px; color: #5E6C82; font-weight: bold;">RELATIONSHIPS</span><br><strong style="color: #1B365D;">{data['relationship_count']}</strong></div>
+                    <div><span style="font-size: 11px; color: #5E6C82; font-weight: bold;">SCORE</span><br><strong style="color: #1B365D;">{quiz_summary_text}</strong></div>
+                </div>
+                <div style="display: flex; justify-content: space-between; align-items: flex-end; margin-top: 30px; padding: 0 40px;">
+                    <div style="text-align: center;">
+                        <p style="margin: 0; font-size: 13px; font-style: italic;">Automated Simulation Engine</p>
+                        <hr style="width: 140px; border: 0.5px solid #D8E0EC; margin: 4px auto;">
+                        <p style="margin: 0; font-size: 11px; color: #5E6C82;">Virtual Lab Evaluator</p>
+                    </div>
+                    <div style="text-align: center; border: 2px dashed #B48C32; border-radius: 50%; width: 60px; height: 60px; line-height: 56px; color: #B48C32; font-weight: bold; font-size: 9px;">
+                        VERIFIED
+                    </div>
+                    <div style="text-align: center;">
+                        <p style="margin: 0; font-size: 13px; font-style: italic;">Course Faculty Coordinator</p>
+                        <hr style="width: 140px; border: 0.5px solid #D8E0EC; margin: 4px auto;">
+                        <p style="margin: 0; font-size: 11px; color: #5E6C82;">Department of CSE</p>
+                    </div>
+                </div>
+                <p style="font-size: 10px; color: #5E6C82; margin-top: 25px; margin-bottom: 0;">
+                    Certificate ID: <strong>{cert_id}</strong> &nbsp;·&nbsp; Issued On: <strong>{student.get('date') or datetime.now().strftime('%Y-%m-%d')}</strong> &nbsp;·&nbsp; Verify at: virtual-labs.ac.in
+                </p>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+    st.divider()
+
+    # PDF Certificate Generation & Download Controls
+    btn_col1, btn_col2 = st.columns(2)
+    with btn_col1:
+        if st.button("Generate Official Landscape PDF Certificate", type="primary", use_container_width=True):
+            context = {
+                "student": st.session_state.student,
+                "domain": st.session_state.domain,
+                "observations": data,
+                "quiz": quiz,
+                "cert_id": cert_id,
+            }
+            cert_bytes, cert_err = report_generator.build_certificate(context)
+            st.session_state.certificate_bytes = cert_bytes
+            st.session_state.certificate_error = cert_err
+            if cert_err:
+                st.error(f"Could not generate certificate: {cert_err}")
+            else:
+                st.session_state.certificate_done = True
+                st.success("Official Certificate generated! Click download below.")
+
+    with btn_col2:
+        if st.session_state.certificate_bytes:
+            filename = f"KG_Lab_Certificate_{(student.get('roll') or 'student').replace(' ', '_')}.pdf"
+            st.download_button(
+                "Download Certificate (PDF)",
+                data=st.session_state.certificate_bytes,
+                file_name=filename,
+                mime="application/pdf",
+                type="primary",
+                use_container_width=True,
+            )
+        else:
+            st.button("Download Certificate (PDF)", disabled=True, use_container_width=True)
+
+    st.divider()
+    ref_col1, ref_col2 = st.columns([3, 1])
+    with ref_col1:
+        st.caption("Looking to expand your knowledge graph skills? Explore academic books, formal GQL standards, and research papers.")
+    with ref_col2:
+        if st.button("Explore References", use_container_width=True, key="goto_refs_from_cert"):
+            _goto_section("References")
+            st.rerun()
+
+
+# ======================================================================
+#  7. REFERENCES
+# ======================================================================
+def render_references() -> None:
+    st.header("References & Bibliography")
+    st.caption("Curated academic textbooks, landmark survey papers, international standards, and software ecosystem.")
+
+    st.subheader("1. Foundational Textbooks & Monographs")
+    st.markdown(
+        """
+1. **Robinson, I., Webber, J., & Eifrem, E. (2015).**  
+   *Graph Databases: New Opportunities for Connected Data* (2nd ed.). O'Reilly Media.  
+   *Focus: Property graph modeling, traversal algorithms, and real-world connected data architectures.*
+
+2. **Silberschatz, A., Korth, H. F., & Sudarshan, S. (2019).**  
+   *Database System Concepts* (7th ed.). McGraw-Hill.  
+   *Focus: Comparative database architectures, relational normal forms vs. semi-structured data models.*
+
+3. **Kleppmann, M. (2017).**  
+   *Designing Data-Intensive Applications: The Big Ideas Behind Reliable, Scalable, and Maintainable Systems*. O'Reilly Media.  
+   *Focus: Chapter 2: Data Models and Query Languages (Document vs. Relational vs. Graph-like Data Models).*
+
+4. **Allemang, D., & Hendler, J. (2011).**  
+   *Semantic Web for the Working Ontologist: Effective Modeling in RDFS and OWL* (2nd ed.). Morgan Kaufmann.  
+   *Focus: Formal knowledge representation, RDF triples, ontologies, and semantic inferencing.*
+        """
+    )
+
+    st.divider()
+
+    st.subheader("2. Landmark Academic Papers & Surveys")
+    st.markdown(
+        """
+1. **Hogan, A., Blomqvist, E., Cochez, M., d'Amato, C., de Melo, G., Gutierrez, C., Labra Gayo, J. E., Sabrina, K., Neumaier, S., Polleres, A., Sabbir, M., & Zimmermann, A. (2021).**  
+   *"Knowledge Graphs"*. **ACM Computing Surveys**, 54(4), Article 71, 1–37.  
+   *Overview: Authoritative survey synthesizing graph representations, deductive/inductive knowledge, validation, and embeddings.*
+
+2. **Angles, R., & Gutierrez, C. (2008).**  
+   *"Survey of Graph Database Models"*. **ACM Computing Surveys**, 40(1), Article 1, 1–39.  
+   *Overview: Foundational taxonomy contrasting hypergraphs, labeled property graphs, and semantic networks.*
+
+3. **Ji, S., Pan, S., Cambria, E., Marttinen, P., & Yu, P. S. (2021).**  
+   *"A Survey on Knowledge Graphs: Representation, Acquisition, and Applications"*. **IEEE Transactions on Neural Networks and Learning Systems**, 33(2), 494–514.  
+   *Overview: Knowledge graph construction, multi-hop reasoning, and neural graph embeddings.*
+
+4. **Bonifati, A., Dumbrava, S., & Fletcher, G. (2020).**  
+   *"Graph Query Languages: Status, Trends, and Challenges"*. **ACM SIGMOD Record**, 49(1), 5–16.  
+   *Overview: Evolution of graph pattern matching, path queries, and standard query language design.*
+        """
+    )
+
+    st.divider()
+
+    st.subheader("3. Formal Standards & Specifications")
+    standards_data = [
+        {
+            "Standard": "ISO/IEC 39075:2024 (GQL)",
+            "Organization": "ISO / IEC JTC 1/SC 32",
+            "Description": "The first formal international standard query language specifically for Property Graphs, supporting declarative graph pattern matching, graph types, and mutations.",
+        },
+        {
+            "Standard": "openCypher Specification",
+            "Organization": "openCypher Project",
+            "Description": "Open-source specification of the Cypher property graph query language with formal EBNF grammar and TCK (Technology Compatibility Kit).",
+        },
+        {
+            "Standard": "W3C RDF 1.1 & OWL 2",
+            "Organization": "World Wide Web Consortium (W3C)",
+            "Description": "Standards for semantic graph data interchange, uniform resource identifiers (URIs), triples (subject-predicate-object), and formal web ontology languages.",
+        },
+        {
+            "Standard": "Property Graph Schema (PGS)",
+            "Organization": "LDBC (Linked Data Benchmark Council)",
+            "Description": "Formal schema definition language for property graphs, specifying vertex and edge types, property domains, and cardinality constraints.",
+        },
+    ]
+    st.dataframe(pd.DataFrame(standards_data), hide_index=True, use_container_width=True)
+
+    st.divider()
+
+    st.subheader("4. Software & Educational Ecosystem")
+    col1, col2 = st.columns(2)
+    with col1:
+        st.markdown("**Python Graph Libraries**")
+        st.markdown(
+            """
+- **NetworkX:** Python software for the creation, manipulation, and study of the structure, dynamics, and functions of complex networks.
+- **Plotly:** Interactive declarative visualization library used in this virtual lab for dynamic schema and graph network rendering.
+- **Pandas:** Structured tabular manipulation library facilitating CSV validation and two-pass ingestion.
+- **fpdf2:** Modern minimalist PDF engine used for building the 13-section lab report and landscape certificate.
+            """
+        )
+    with col2:
+        st.markdown("**Educational Portals & Tutorials**")
+        st.markdown(
+            """
+- **Virtual Labs (Govt. of India):** An initiative under NMEICT providing remote-access to interactive simulation labs in science and engineering.
+- **Neo4j GraphAcademy:** Interactive hands-on training courses on Graph Data Modeling, Cypher queries, and Knowledge Graph architectures.
+- **Stanford CS224W (Machine Learning with Graphs):** Comprehensive university course on graph algorithms, graph neural networks (GNNs), and knowledge graphs.
+            """
+        )
+
+    st.divider()
+    st.caption("You have reached the end of the virtual laboratory curriculum. Review your report in Report Generation or download your Certificate!")
 
 
 # ======================================================================
@@ -1914,18 +2351,27 @@ def render_report() -> None:
 # ======================================================================
 def main() -> None:
     init_state()
-    render_topbar()
+    render_sidebar()
+    render_main_header()
 
     page = st.session_state.page
     try:
-        if page == SECTIONS[0]:
+        if page == "Purpose":
+            render_purpose()
+        elif page == "Theory":
             render_theory()
-        elif page == SECTIONS[1]:
+        elif page == "Simulation":
             render_simulation()
-        elif page == SECTIONS[2]:
+        elif page == "Quiz":
             render_quiz()
-        else:
+        elif page == "Report Generation":
             render_report()
+        elif page == "Certificate":
+            render_certificate()
+        elif page == "References":
+            render_references()
+        else:
+            render_purpose()
     except Exception as exc:  # last-resort guard: never lose the interface
         st.error(
             "Something went wrong while drawing this section: %s: %s"
