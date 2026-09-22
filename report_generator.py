@@ -111,7 +111,7 @@ class LabReport(FPDF):
         self.set_font("Helvetica", "I", 9)
         self.set_text_color(*MUTED)
         self._line_text(
-            "Knowledge Graph Schema Design, Data Import and Cypher Querying with Neo4j",
+            "Knowledge Graph Schema Design, Data Import and Graph Analysis",
             align="C",
         )
         self.set_y(56)
@@ -313,18 +313,18 @@ class LabReport(FPDF):
 LEARNING_OBJECTIVES = [
     "Explain the concept of a knowledge graph.",
     "Identify entities and relationships from structured data.",
-    "Design appropriate Neo4j node labels.",
+    "Design appropriate node labels.",
     "Define meaningful relationship types.",
     "Assign properties to nodes and relationships.",
     "Construct a domain-specific graph schema.",
-    "Import structured data into Neo4j.",
-    "Write basic Cypher queries.",
-    "Traverse relationships in a graph.",
-    "Analyze the resulting knowledge graph.",
+    "Validate a graph schema before importing data into it.",
+    "Import structured entity-relationship data into a graph.",
+    "Query and analyze a knowledge graph.",
+    "Interpret the results of graph queries.",
 ]
 
 PROCEDURE_STEPS = [
-    "Study the theory of knowledge graphs and Neo4j.",
+    "Study the theory of knowledge graphs and graph databases.",
     "Identify entities from the provided dataset.",
     "Identify relationships between entities.",
     "Define node labels.",
@@ -332,8 +332,9 @@ PROCEDURE_STEPS = [
     "Define relationship types.",
     "Design the graph schema.",
     "Review the schema using the visual schema designer.",
-    "Import the structured data.",
-    "Execute Cypher queries.",
+    "Validate the schema and correct any reported problems.",
+    "Import the structured data into the graph.",
+    "Execute graph queries.",
     "Analyze the graph visualization.",
     "Record observations.",
     "Complete the quiz.",
@@ -342,24 +343,37 @@ PROCEDURE_STEPS = [
 
 THEORY_SUMMARY = (
     "A knowledge graph stores information as entities (nodes) joined by named, "
-    "directed relationships, with properties held on both. Neo4j implements the "
-    "property graph model: a node carries one or more labels that classify it "
-    "(for example :Student), a relationship carries exactly one type that names "
-    "the connection (for example ENROLLED_IN), and both carry key-value "
-    "properties. Because each node stores its own relationships, traversing a "
-    "connection is a local step rather than a join across tables, which is why "
-    "graph databases suit highly connected data.\n\n"
+    "directed relationships, with properties held on both. This is the property "
+    "graph model: a node carries one or more labels that classify it (for example "
+    "Student), a relationship carries exactly one type that names the connection "
+    "(for example ENROLLED_IN), and both carry key-value properties. Because each "
+    "node stores its own relationships, following a connection is a local step "
+    "rather than a join across tables, which is why this model suits highly "
+    "connected data.\n\n"
     "Schema design for a knowledge graph means choosing the node labels that "
     "represent real entities, choosing relationship types that read as verbs "
-    "between them, deciding which facts are properties of a node and which "
-    "belong to a relationship, and giving every entity a unique identifier so "
-    "that repeated imports do not create duplicates. Data is loaded with Cypher: "
-    "CREATE always inserts, MERGE matches first and only creates when nothing "
-    "matched, MATCH finds existing patterns, SET updates properties, and "
-    "DETACH DELETE removes a node together with its relationships. LOAD CSV "
-    "streams rows from a structured file so that each row can be turned into "
-    "nodes and relationships by those same clauses."
+    "between them, deciding which facts are properties of a node and which belong "
+    "to a relationship, and giving every entity a unique identifier so that "
+    "repeated imports do not create duplicates. Structured data maps directly onto "
+    "this model: a table becomes a label, a row becomes a node, a column becomes a "
+    "property, and a foreign key or junction table becomes a relationship. The "
+    "import runs in two passes, creating the entities first and then the "
+    "relationships between them, and each entity is matched on its unique "
+    "identifier so that importing the same data twice updates it instead of "
+    "duplicating it. The resulting graph is then analyzed by following "
+    "relationships from one entity to another."
 )
+
+REFERENCES = [
+    "I. Robinson, J. Webber and E. Eifrem, Graph Databases, 2nd edition, "
+    "O'Reilly Media, 2015.",
+    "A. Hogan, E. Blomqvist, M. Cochez et al., \"Knowledge Graphs\", ACM Computing "
+    "Surveys, vol. 54, no. 4, article 71, 2021.",
+    "R. Angles and C. Gutierrez, \"Survey of Graph Database Models\", ACM Computing "
+    "Surveys, vol. 40, no. 1, 2008.",
+    "A. Silberschatz, H. F. Korth and S. Sudarshan, Database System Concepts, 7th "
+    "edition, McGraw-Hill, 2019.",
+]
 
 
 def _schema_tables(schema: Dict[str, Any]) -> Tuple[List[List[str]], List[List[str]]]:
@@ -397,6 +411,51 @@ def build_report(context: Dict[str, Any]) -> Tuple[Optional[bytes], Optional[str
         return None, "%s: %s" % (type(exc).__name__, exc)
 
 
+def _result_statement(context: Dict[str, Any]) -> str:
+    """Describe what the student actually completed -- nothing more."""
+    schema = context.get("schema", {})
+    observations = context.get("observations", {})
+    dataset = context.get("dataset_summary", {})
+    labels = [n.get("label") for n in schema.get("nodes", []) if n.get("label")]
+    rel_types = sorted({r.get("type") for r in schema.get("relationships", []) if r.get("type")})
+    nodes = observations.get("node_count", 0)
+    rels = observations.get("relationship_count", 0)
+
+    parts = [
+        "A knowledge graph schema for the %s domain was designed with %d node "
+        "label(s) (%s) and %d relationship type(s) (%s)."
+        % (
+            context.get("domain", "selected"),
+            len(labels),
+            ", ".join(labels) or "none",
+            len(rel_types),
+            ", ".join(rel_types) or "none",
+        )
+    ]
+    if nodes:
+        parts.append(
+            "Structured entity-relationship data from '%s' was imported into the "
+            "simulation graph, producing %d node(s) and %d relationship(s)."
+            % (dataset.get("source", "the dataset"), nodes, rels)
+        )
+    else:
+        parts.append("No data was imported into the graph during this session.")
+    if observations.get("queries_total"):
+        parts.append(
+            "%d graph quer(y/ies) were executed: %d succeeded and %d failed, "
+            "returning %d record(s) in total."
+            % (
+                observations.get("queries_total", 0),
+                observations.get("queries_ok", 0),
+                observations.get("queries_failed", 0),
+                observations.get("records_returned", 0),
+            )
+        )
+    else:
+        parts.append("No graph queries were executed during this session.")
+    return " ".join(parts)
+
+
 def _render(context: Dict[str, Any]) -> LabReport:
     student = context.get("student", {})
     schema = context.get("schema", {})
@@ -410,8 +469,7 @@ def _render(context: Dict[str, Any]) -> LabReport:
     pdf.add_page()
     pdf.title_block()
 
-    # 1. Student information -------------------------------------------------
-    pdf.h1("1. Student Information")
+    # Student information ----------------------------------------------------
     pdf.key_values(
         [
             ("Student Name", student.get("name") or "-"),
@@ -419,51 +477,59 @@ def _render(context: Dict[str, Any]) -> LabReport:
             ("Department", student.get("department") or "-"),
             ("Semester", student.get("semester") or "-"),
             ("Experiment Date", student.get("date") or date.today().isoformat()),
-            ("Experiment", "%s - %s" % (EXPERIMENT_NUMBER, EXPERIMENT_TITLE)),
+        ]
+    )
+
+    # 1. Experiment title ----------------------------------------------------
+    pdf.h1("1. Experiment Title")
+    pdf.key_values(
+        [
+            ("Experiment No.", EXPERIMENT_NUMBER.replace("Experiment ", "")),
+            ("Title", EXPERIMENT_TITLE),
             ("Domain Modelled", schema.get("domain") or context.get("domain") or "-"),
             ("Execution Mode", context.get("mode", "Local Simulation")),
         ]
     )
 
-    # 2. Aim and objectives --------------------------------------------------
-    pdf.h1("2. Aim and Learning Objectives")
+    # 2. Aim -----------------------------------------------------------------
+    pdf.h1("2. Aim")
     pdf.body(
-        "Aim: to design a domain-specific knowledge graph schema, import structured "
-        "entity-relationship data into it, and query the resulting graph using Cypher."
+        "To design a domain-specific knowledge graph schema using nodes, "
+        "relationships and properties, to import structured entity-relationship "
+        "data into the graph, and to query and analyze the resulting knowledge graph."
     )
-    pdf.h2("By the end of the experiment the student should be able to:")
+
+    # 3. Objectives ----------------------------------------------------------
+    pdf.h1("3. Objectives")
+    pdf.body("By the end of the experiment the student should be able to:")
     pdf.bullets(LEARNING_OBJECTIVES, numbered=True)
 
-    # 3. Theory --------------------------------------------------------------
-    pdf.h1("3. Theory Summary")
+    # 4. Theory --------------------------------------------------------------
+    pdf.h1("4. Theory")
     pdf.body(THEORY_SUMMARY)
 
-    # 4. Procedure -----------------------------------------------------------
-    pdf.h1("4. Experimental Procedure")
+    # 5. Procedure -----------------------------------------------------------
+    pdf.h1("5. Procedure")
     pdf.bullets(PROCEDURE_STEPS, numbered=True)
 
-    # 5. Designed schema -----------------------------------------------------
+    # 6. Schema design -------------------------------------------------------
     pdf.add_page()
-    pdf.h1("5. Designed Knowledge Graph Schema")
+    pdf.h1("6. Schema Design")
     node_rows, rel_rows = _schema_tables(schema)
-    pdf.h2("5.1 Node labels, unique identifiers and properties")
-    pdf.table(
-        ["Node label", "Unique ID property", "Properties"],
-        node_rows,
-        [38, 40, 102],
-    )
-    pdf.h2("5.2 Relationship types")
+    pdf.h2("6.1 Node labels, unique identifiers and properties")
+    pdf.table(["Node label", "Unique ID property", "Properties"], node_rows, [38, 40, 102])
+    pdf.h2("6.2 Relationship types")
     pdf.table(
         ["Relationship type", "Source label", "Target label", "Properties"],
         rel_rows,
         [48, 42, 42, 48],
     )
-    pdf.h2("5.3 Schema diagram")
+    pdf.h2("6.3 Schema diagram")
     if not pdf.schema_diagram(schema):
         pdf.body("(The schema has no node labels, so no diagram could be drawn.)")
 
-    # 6. Dataset -------------------------------------------------------------
-    pdf.h1("6. Imported Dataset Summary")
+    # 7. Data used -----------------------------------------------------------
+    pdf.h1("7. Data Used")
     if dataset.get("node_total"):
         pdf.key_values(
             [
@@ -486,11 +552,54 @@ def _render(context: Dict[str, Any]) -> LabReport:
     else:
         pdf.body("No dataset was loaded during this session.")
 
-    # 7. Trials --------------------------------------------------------------
+    # 8. Graph queries / analysis --------------------------------------------
     pdf.add_page()
-    pdf.h1("7. Recorded Experimental Trials")
+    pdf.h1("8. Graph Queries / Analysis")
+    if queries:
+        rows = [
+            [
+                index,
+                item.get("query", ""),
+                "Yes" if item.get("ok") else "No",
+                item.get("records", 0),
+                "%.1f" % float(item.get("ms", 0.0)),
+            ]
+            for index, item in enumerate(queries[-15:], start=1)
+        ]
+        pdf.table(
+            ["#", "Graph query", "Succeeded", "Results", "Time (ms)"],
+            rows,
+            [10, 98, 24, 24, 24],
+        )
+    else:
+        pdf.body("No graph queries were executed during this session.")
+    pdf.h2("8.1 Query results summary")
+    pdf.key_values(
+        [
+            ("Queries executed", observations.get("queries_total", 0)),
+            ("Successful queries", observations.get("queries_ok", 0)),
+            ("Failed queries", observations.get("queries_failed", 0)),
+            ("Total results returned", observations.get("records_returned", 0)),
+        ]
+    )
+
+    # 9. Observations --------------------------------------------------------
+    pdf.h1("9. Observations")
+    pdf.key_values(
+        [
+            ("Node labels in graph", observations.get("label_count", 0)),
+            ("Relationship types in graph", observations.get("relationship_type_count", 0)),
+            ("Nodes in graph", observations.get("node_count", 0)),
+            ("Relationships in graph", observations.get("relationship_count", 0)),
+            ("Average relationships per node", observations.get("avg_rels_per_node", 0)),
+        ]
+    )
+    notes = observations.get("notes", [])
+    if notes:
+        pdf.bullets(notes)
+    pdf.h2("9.1 Recorded experimental trials")
     if trials:
-        headers = ["#", "Domain", "Labels", "Rel types", "Nodes", "Rels", "Records", "Status"]
+        headers = ["#", "Domain", "Labels", "Rel types", "Nodes", "Rels", "Results", "Status"]
         rows = [
             [
                 trial.get("Trial", ""),
@@ -505,62 +614,22 @@ def _render(context: Dict[str, Any]) -> LabReport:
             for trial in trials
         ]
         pdf.table(headers, rows, [10, 32, 18, 22, 18, 18, 22, 40])
-        pdf.h2("Cypher query recorded with each trial")
+        pdf.h2("9.2 Graph query recorded with each trial")
         for trial in trials:
-            query = str(trial.get("Cypher Query", "")).strip()
+            query = str(trial.get("Graph Query", "")).strip()
             if query:
-                pdf.body("Trial %s (%s):" % (trial.get("Trial", "?"), trial.get("Timestamp", "")))
-                pdf.code_block(query, max_lines=6)
+                pdf.body(
+                    "Trial %s (%s): %s"
+                    % (trial.get("Trial", "?"), trial.get("Timestamp", ""), query)
+                )
     else:
         pdf.body("No trials were recorded in the Experimental Data Logbook.")
 
-    # 8. Queries -------------------------------------------------------------
-    pdf.h1("8. Cypher Queries Executed")
-    if queries:
-        for index, item in enumerate(queries[-10:], start=1):
-            status = "SUCCESS" if item.get("ok") else "FAILED"
-            pdf.h2(
-                "Query %d - %s (%s, %d record(s), %.1f ms)"
-                % (
-                    index,
-                    status,
-                    item.get("mode", "-"),
-                    item.get("records", 0),
-                    float(item.get("ms", 0.0)),
-                )
-            )
-            pdf.code_block(item.get("query", ""), max_lines=8)
-            if not item.get("ok") and item.get("error"):
-                pdf.body("Error reported: %s" % item["error"])
-    else:
-        pdf.body("No Cypher queries were executed from the query playground.")
+    # 10. Results ------------------------------------------------------------
+    pdf.h1("10. Results")
+    pdf.body(_result_statement(context))
 
-    pdf.h1("9. Query Results Summary")
-    pdf.key_values(
-        [
-            ("Queries executed", observations.get("queries_total", 0)),
-            ("Successful queries", observations.get("queries_ok", 0)),
-            ("Failed queries", observations.get("queries_failed", 0)),
-            ("Total records returned", observations.get("records_returned", 0)),
-        ]
-    )
-
-    # 10. Observations -------------------------------------------------------
-    pdf.h1("10. Observations")
-    pdf.key_values(
-        [
-            ("Node labels in graph", observations.get("label_count", 0)),
-            ("Relationship types in graph", observations.get("relationship_type_count", 0)),
-            ("Nodes in graph", observations.get("node_count", 0)),
-            ("Relationships in graph", observations.get("relationship_count", 0)),
-            ("Average relationships per node", observations.get("avg_rels_per_node", 0)),
-        ]
-    )
-    notes = observations.get("notes", [])
-    if notes:
-        pdf.bullets(notes)
-
-    # 11. Quiz ---------------------------------------------------------------
+    # 11. Quiz score ---------------------------------------------------------
     pdf.h1("11. Quiz Score")
     if quiz:
         pdf.key_values(
@@ -581,9 +650,13 @@ def _render(context: Dict[str, Any]) -> LabReport:
         pdf.body("The quiz was not attempted in this session.")
 
     # 12. Conclusion ---------------------------------------------------------
-    pdf.h1("12. Student Conclusion")
+    pdf.h1("12. Conclusion")
     conclusion = (context.get("conclusion") or "").strip()
     pdf.body(conclusion if conclusion else "(No conclusion was written by the student.)")
+
+    # 13. References ---------------------------------------------------------
+    pdf.h1("13. References")
+    pdf.bullets(REFERENCES, numbered=True)
 
     pdf.ln(8)
     pdf.set_font("Helvetica", "", 9.5)

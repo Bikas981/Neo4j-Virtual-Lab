@@ -9,8 +9,9 @@ The engineering behind the laboratory's middle steps:
 * :func:`generate_cypher`  -- writes the import script from schema + data
 * :func:`build_local_graph` -- runs that same script on the in-memory engine
 
-Both execution modes run the *same generated Cypher*, so what a student sees in
-simulation mode is exactly what would be sent to a real Neo4j server.
+The import statements produced here are executed by the in-memory simulation
+engine. They are an internal implementation detail and are not shown in the
+laboratory interface.
 """
 
 from __future__ import annotations
@@ -62,7 +63,7 @@ def validate_schema(schema: Dict[str, Any]) -> Tuple[List[str], List[str]]:
 
         if not label[:1].isupper():
             warnings.append(
-                "Node label '%s' does not start with a capital letter. The Neo4j "
+                "Node label '%s' does not start with a capital letter. The "
                 "convention is CamelCase, for example Student." % label
             )
 
@@ -81,8 +82,9 @@ def validate_schema(schema: Dict[str, Any]) -> Tuple[List[str], List[str]]:
         key = (node.get("key") or "").strip()
         if not key:
             errors.append(
-                "Node '%s' has no unique ID property. Every entity needs a key so that "
-                "MERGE can prevent duplicates." % label
+                "Node '%s' has no unique ID property. Every entity needs a key so "
+                "that the import can recognise an entity that already exists and "
+                "avoid creating a duplicate." % label
             )
         elif key not in properties:
             errors.append(
@@ -112,7 +114,7 @@ def validate_schema(schema: Dict[str, Any]) -> Tuple[List[str], List[str]]:
             )
         elif rtype != rtype.upper():
             warnings.append(
-                "Relationship type '%s' is not in UPPER_SNAKE_CASE. The Neo4j convention "
+                "Relationship type '%s' is not in UPPER_SNAKE_CASE. The convention "
                 "is ENROLLED_IN rather than %s." % (rtype, rtype)
             )
 

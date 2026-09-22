@@ -1,14 +1,15 @@
 """
 app.py
 ======
-Virtual Lab: Knowledge Graph Schema Design & Neo4j Data Import
+Virtual Lab: Knowledge Graph Schema Design & Data Import
 (Experiment 9 -- Design a Knowledge Graph Schema and Import Data)
 
 Run with:  streamlit run app.py
 
-The laboratory works with or without a Neo4j server.  When no database is
-reachable it switches to a Local Simulation engine that runs the *same*
-generated Cypher in memory, so every stage of the experiment stays usable.
+The laboratory runs entirely on its built-in Local Simulation engine, which
+stores the knowledge graph in memory. No database installation or connection is
+required, and the query language of the engine is an internal implementation
+detail that the student never has to see.
 
 Only native Streamlit components are used -- no custom CSS -- so the app looks
 correct in both the light and dark Streamlit themes.
@@ -30,16 +31,14 @@ import graph_viz
 import quiz_bank
 import report_generator
 import schema_tools
-from neo4j_service import DRIVER_AVAILABLE, Neo4jService, env_defaults, env_password_present
 from simulation_engine import (
-    NEO4J_MODE,
     SIMULATION_MODE,
     InMemoryGraph,
     QueryResult,
     execute_cypher,
 )
 
-APP_TITLE = "Virtual Lab: Knowledge Graph Schema Design & Neo4j Data Import"
+APP_TITLE = "Virtual Lab: Knowledge Graph Schema Design & Data Import"
 APP_SUBTITLE = "Design, construct, import, query and analyze a domain-specific knowledge graph"
 
 # Note the separator: a label like "1. Theory" would be parsed as a Markdown
@@ -91,8 +90,6 @@ def load_domain(domain_name: str) -> None:
     st.session_state.import_status = "Not imported"
     st.session_state.import_summary = {}
     st.session_state.import_done = False
-    st.session_state.query_text = domain["queries"][0]["cypher"]
-    st.session_state.query_nonce = st.session_state.get("query_nonce", 0) + 1
 
 
 def init_state() -> None:
@@ -113,7 +110,7 @@ def init_state() -> None:
         # instead of deleting the old ones while they may still be rendered.
         "quiz_round": 0,
         "quiz_unanswered": 0,
-        "query_nonce": 0,
+        "last_query_frame": None,
         "last_result": None,
         "report_bytes": None,
         "report_error": None,
@@ -125,25 +122,18 @@ def init_state() -> None:
             "semester": "",
             "date": datetime.now().strftime("%Y-%m-%d"),
         },
-        "connection_message": "",
-        "connection_ok": None,
     }
     for key, value in defaults.items():
         if key not in st.session_state:
             st.session_state[key] = value
 
-    if "neo4j" not in st.session_state:
-        st.session_state.neo4j = Neo4jService()
     if "schema" not in st.session_state:
         load_domain(domains.DEFAULT_DOMAIN)
 
 
-def service() -> Neo4jService:
-    return st.session_state.neo4j
-
-
 def current_mode() -> str:
-    return NEO4J_MODE if service().is_connected else SIMULATION_MODE
+    """The laboratory always executes on its built-in simulation engine."""
+    return SIMULATION_MODE
 
 
 def is_dark_theme() -> bool:
@@ -161,15 +151,11 @@ def is_dark_theme() -> bool:
 
 
 def active_snapshot() -> Dict[str, Any]:
-    """Graph data for the visualisations, from whichever backend is active."""
-    if service().is_connected:
-        return service().fetch_graph(limit=300)
+    """Graph data for the visualisations, taken from the simulation engine."""
     return st.session_state.graph.snapshot()
 
 
 def active_stats() -> Dict[str, Any]:
-    if service().is_connected:
-        return service().stats()
     graph: InMemoryGraph = st.session_state.graph
     stats = graph.stats()
     stats["label_counts"] = graph.label_counts()
@@ -177,10 +163,12 @@ def active_stats() -> Dict[str, Any]:
     return stats
 
 
-def run_cypher(query: str) -> QueryResult:
-    """Execute against Neo4j when connected, otherwise the local engine."""
-    if service().is_connected:
-        return service().run_query(query)
+def run_graph_query(query: str) -> QueryResult:
+    """Run a query built by the interface against the simulation engine.
+
+    The engine's query language is an internal implementation detail: the
+    interface builds the statement and never shows it to the student.
+    """
     return execute_cypher(st.session_state.graph, query)
 
 
@@ -236,7 +224,7 @@ def observations() -> Dict[str, Any]:
             )
     if history:
         notes.append(
-            "%d Cypher quer(y/ies) were executed in %s mode: %d succeeded and %d failed."
+            "%d graph quer(y/ies) were executed in %s mode: %d succeeded and %d failed."
             % (len(history), current_mode(), ok, failed)
         )
 
@@ -284,12 +272,8 @@ def render_topbar() -> None:
         st.title(APP_TITLE)
         st.caption("%s · Experiment 9" % APP_SUBTITLE)
     with status_col:
-        if service().is_connected:
-            st.success("**Mode:** Neo4j")
-            st.caption("%s · database %s" % (service().uri, service().database))
-        else:
-            st.info("**Mode:** Local Simulation")
-            st.caption("No database connected.")
+        st.info("**Mode:** Local Simulation")
+        st.caption("Built-in simulation engine.")
 
     # Navigation bar: one full-width button per section, the active one filled.
     # (A segmented control would look the same but cannot be driven by
@@ -328,11 +312,10 @@ def render_theory() -> None:
     tabs = st.tabs(
         [
             "Knowledge Graphs",
-            "Neo4j Fundamentals",
+            "Graph Database Fundamentals",
             "Schema Design",
             "Design Principles",
             "Data Import",
-            "Cypher Basics",
             "Objectives & Procedure",
         ]
     )
@@ -352,17 +335,22 @@ An entity is a distinct thing you want to describe: a student, a course, a patie
 a product, a movie. Entities are usually the *nouns* in the description of a domain.
 
 **What is a node?**
-A node is how a graph database stores one entity. In this lab the entity
-"the student with id S001" becomes the node `(:Student {student_id: 'S001'})`.
+A node is how a graph stores one entity. In this lab the entity "the student with
+id S001" becomes a node with the label **Student** and the properties
+`student_id = S001`, `name = Aditi`, `semester = 4`.
 
 **What is a relationship (an edge)?**
 A relationship joins exactly two nodes, has a direction and a single **type** that
-names the connection, for example `(:Student)-[:ENROLLED_IN]->(:Course)`. Reading
-the pattern out loud should form a sentence: *a Student is enrolled in a Course.*
-
+names the connection. Reading it out loud should form a sentence:
+*a Student is enrolled in a Course.*
+            """
+        )
+        st.code("Student  --[ENROLLED_IN]-->  Course", language="text")
+        st.markdown(
+            """
 **What is a property?**
 A property is a key-value fact stored on a node or on a relationship, such as
-`name: 'Aditi'`, `credits: 4` or `grade: 'A'`.
+`name = Aditi`, `credits = 4` or `grade = A`.
             """
         )
         st.subheader("Relational database vs graph database")
@@ -371,33 +359,33 @@ A property is a key-value fact stored on a node or on a relationship, such as
                 [
                     {
                         "Aspect": "Basic unit",
-                        "Relational (SQL)": "Row in a table",
-                        "Graph (Neo4j)": "Node with labels and properties",
+                        "Relational (tables)": "Row in a table",
+                        "Graph database": "Node with labels and properties",
                     },
                     {
                         "Aspect": "How things connect",
-                        "Relational (SQL)": "Foreign keys + JOIN at query time",
-                        "Graph (Neo4j)": "Stored relationships, traversed directly",
+                        "Relational (tables)": "Foreign keys, joined at query time",
+                        "Graph database": "Stored relationships, traversed directly",
                     },
                     {
                         "Aspect": "Cost of one more hop",
-                        "Relational (SQL)": "Another JOIN, cost grows with table size",
-                        "Graph (Neo4j)": "A local step from the node you are on",
+                        "Relational (tables)": "Another join; cost grows with table size",
+                        "Graph database": "A local step from the node you are on",
                     },
                     {
                         "Aspect": "Many-to-many",
-                        "Relational (SQL)": "Extra junction table",
-                        "Graph (Neo4j)": "Just another relationship",
+                        "Relational (tables)": "Extra junction table",
+                        "Graph database": "Just another relationship",
                     },
                     {
                         "Aspect": "Schema",
-                        "Relational (SQL)": "Fixed columns, declared up front",
-                        "Graph (Neo4j)": "Flexible; labels and properties can differ per node",
+                        "Relational (tables)": "Fixed columns, declared up front",
+                        "Graph database": "Flexible; labels and properties can differ per node",
                     },
                     {
                         "Aspect": "Best at",
-                        "Relational (SQL)": "Aggregating large uniform tables",
-                        "Graph (Neo4j)": "Following connections, paths and patterns",
+                        "Relational (tables)": "Aggregating large uniform tables",
+                        "Graph database": "Following connections, paths and patterns",
                     },
                 ]
             ),
@@ -405,49 +393,60 @@ A property is a key-value fact stored on a node or on a relationship, such as
             width="stretch",
         )
         st.info(
-            "**Why graph databases suit connected data:** each node physically stores "
-            "its own relationships (*index-free adjacency*), so the cost of following a "
-            "connection does not depend on how big the database is. A question like "
-            "'which students share a course with Aditi?' is two hops in Cypher, but two "
-            "joins over potentially huge tables in SQL."
+            "**Why graph storage suits connected data:** each node keeps its own "
+            "relationships, so the cost of following a connection does not depend on "
+            "how big the dataset is. A question such as 'which students share a course "
+            "with Aditi?' is two hops in a graph, but two joins over potentially huge "
+            "tables in a relational database."
         )
 
     with tabs[1]:
-        st.subheader("Neo4j Fundamentals")
+        st.subheader("Graph Database Fundamentals")
         st.markdown(
             """
-**Neo4j** is a graph database that implements the **property graph model**. Its four
-building blocks are:
+A knowledge graph is usually stored using the **property graph model**. It has four
+building blocks:
 
 | Concept | Meaning | Example |
 |---|---|---|
-| **Node** | One entity | `(s:Student)` |
-| **Label** | A category for a node; a node may have several | `:Student`, `:Person` |
-| **Relationship** | A directed connection between two nodes | `(s)-[:ENROLLED_IN]->(c)` |
+| **Node** | One entity | a particular student |
+| **Label** | A category for a node; a node may have several | `Student`, `Course` |
+| **Relationship** | A directed connection between exactly two nodes | Student → Course |
 | **Relationship type** | The single name a relationship carries | `ENROLLED_IN` |
-| **Property** | A key-value fact on a node *or* a relationship | `name: 'Aditi'`, `grade: 'A'` |
+| **Property** | A key-value fact on a node *or* on a relationship | `name = Aditi`, `grade = A` |
 
-**Cypher** is Neo4j's query language. It is *pattern based*: you draw the shape of
-the data you want using ASCII art, and Neo4j finds every place that shape occurs.
+The rules of the model are short:
+
+1. A node may carry zero, one or several labels.
+2. A relationship always has a direction, exactly one type, a start node and an
+   end node.
+3. Both nodes and relationships may carry properties.
+4. The relationship itself is the connection; no separate join structure is needed.
             """
         )
         st.code(
-            "//  node        relationship          node\n"
-            "(s:Student)-[r:ENROLLED_IN]->(c:Course)\n"
-            "//   ^              ^                  ^\n"
-            "//  label      relationship type     label",
-            language="cypher",
+            "  Student                ENROLLED_IN                Course\n"
+            "  node + label     relationship + type + property   node + label\n"
+            "  {student_id,           {grade: A}                 {course_id,\n"
+            "   name, semester}                                   name, credits}",
+            language="text",
         )
         st.markdown(
             """
 **The property graph model in one sentence:** *nodes carry labels and properties,
-relationships carry one type, a direction and properties, and everything is stored
-so that a node knows its own relationships.*
+relationships carry one type, a direction and properties, and every node knows its
+own relationships.*
+
+**Direction carries meaning.** A relationship is always stored with a direction,
+so `Student → ENROLLED_IN → Course` and the reverse are different statements. When
+a question does not care about direction, the connection can still be followed
+either way.
             """
         )
         st.caption(
-            "A relationship always has a direction in storage, but you can ignore that "
-            "direction when querying by writing `-[:ENROLLED_IN]-` without an arrow."
+            "This laboratory stores the graph in its own in-memory simulation engine, "
+            "so the model above can be designed, imported and explored without "
+            "installing any database software."
         )
 
     with tabs[2]:
@@ -458,23 +457,19 @@ so that a node knows its own relationships.*
             "Here is the University schema used as the default in this lab."
         )
         st.markdown("**Node labels**")
-        st.code(
-            "Student\nCourse\nFaculty\nDepartment\nProject",
-            language="text",
-        )
+        st.code("Student\nCourse\nFaculty\nDepartment\nProject", language="text")
         st.markdown("**Relationship types**")
         st.code(
-            "ENROLLED_IN\nTEACHES\nBELONGS_TO\nWORKS_ON\nGUIDED_BY",
-            language="text",
+            "ENROLLED_IN\nTEACHES\nBELONGS_TO\nWORKS_ON\nGUIDED_BY", language="text"
         )
         st.markdown("**Patterns**")
         st.code(
-            "(Student)-[:ENROLLED_IN]->(Course)\n"
-            "(Faculty)-[:TEACHES]->(Course)\n"
-            "(Student)-[:BELONGS_TO]->(Department)\n"
-            "(Student)-[:WORKS_ON]->(Project)\n"
-            "(Faculty)-[:GUIDED_BY]->(Project)",
-            language="cypher",
+            "Student  --[ENROLLED_IN]-->  Course\n"
+            "Faculty  --[TEACHES]-->      Course\n"
+            "Student  --[BELONGS_TO]-->   Department\n"
+            "Student  --[WORKS_ON]-->     Project\n"
+            "Faculty  --[GUIDED_BY]-->    Project",
+            language="text",
         )
         st.markdown("**Properties**")
         st.dataframe(
@@ -492,17 +487,17 @@ so that a node knows its own relationships.*
         )
         st.markdown("**Relationship properties**")
         st.code(
-            "(Student)-[:ENROLLED_IN {grade: 'A'}]->(Course)\n"
-            "(Student)-[:WORKS_ON {role: 'Developer'}]->(Project)",
-            language="cypher",
+            "Student  --[ENROLLED_IN {grade: A}]-->       Course\n"
+            "Student  --[WORKS_ON {role: Developer}]-->   Project",
+            language="text",
         )
         st.warning(
-            "**Direction reads as meaning.** This lab keeps `(Faculty)-[:GUIDED_BY]->(Project)` "
-            "because that is the pattern given in the syllabus, but notice that it reads "
-            "backwards: a project is guided by a faculty member, so `(Project)-[:GUIDED_BY]->(Faculty)` "
-            "would be the more natural direction. Either works technically - you just have "
-            "to match the direction you chose when you query. Try reversing it in the "
-            "Schema Designer and watch the diagram update."
+            "**Direction reads as meaning.** This lab keeps `Faculty --[GUIDED_BY]--> "
+            "Project` because that is the pattern given in the syllabus, but notice "
+            "that it reads backwards: a project is guided by a faculty member, so "
+            "`Project --[GUIDED_BY]--> Faculty` would be the more natural direction. "
+            "Either works, as long as questions follow the direction you chose. Try "
+            "reversing it in the Schema Designer and watch the diagram update."
         )
 
     with tabs[3]:
@@ -521,31 +516,26 @@ so that a node knows its own relationships.*
    traversing two others, do not store it as well. A student's department can be
    reached through their course, so store it only if the student's own department
    really can differ.
-5. **Select useful properties.** Keep the facts you will query or display. A fact
-   that depends on *both* endpoints (a grade, a rating, a role) belongs on the
-   relationship, not on either node.
-6. **Give every entity a unique identifier.** `student_id`, `course_id`. This is
-   what `MERGE` uses to decide whether an entity already exists.
-7. **Avoid duplicate entities.** Import with `MERGE` on the key property and back
-   it with a uniqueness constraint. `CREATE` run twice creates two nodes.
+5. **Select useful properties.** Keep the facts you will use. A fact that depends on
+   *both* endpoints (a grade, a rating, a role) belongs on the relationship, not on
+   either node.
+6. **Give every entity a unique identifier.** `student_id`, `course_id`. The import
+   uses this property to decide whether an entity already exists.
+7. **Avoid duplicate entities.** Import by matching on the unique identifier, so
+   that importing the same data twice updates the entity instead of creating a
+   second copy of it.
 8. **Stay consistent.** One naming style, one direction convention, the same
    property name for the same fact everywhere in the graph.
             """
         )
-        st.code(
-            "// Enforce the key so duplicates become impossible\n"
-            "CREATE CONSTRAINT student_id_unique IF NOT EXISTS\n"
-            "FOR (s:Student) REQUIRE s.student_id IS UNIQUE;",
-            language="cypher",
-        )
         col1, col2 = st.columns(2)
         with col1:
             st.markdown("**Poor design**")
-            st.code("(:Data {type: 'student', rel: 'course C101'})", language="cypher")
+            st.code("Data {type: student, course: C101}", language="text")
             st.caption("The meaning is hidden inside properties, so nothing can be traversed.")
         with col2:
             st.markdown("**Good design**")
-            st.code("(:Student)-[:ENROLLED_IN]->(:Course)", language="cypher")
+            st.code("Student  --[ENROLLED_IN]-->  Course", language="text")
             st.caption("The label and the relationship type carry the meaning.")
 
     with tabs[4]:
@@ -559,74 +549,48 @@ format is two CSV files:
 * `relationships.csv` - columns `source_id`, `type`, `target_id`, then any
   relationship properties
 
-The import then happens in two passes: **create the nodes first**, then **connect
-them**. A relationship can only be created once both of its end nodes exist.
+Mapping tabular data onto a graph follows a direct correspondence:
+
+| Structured (table) concept | Knowledge graph concept |
+|---|---|
+| Table (e.g. STUDENT) | Node label (`Student`) |
+| One row of that table | One node |
+| Column | Property |
+| Primary key | Unique identifier property |
+| Foreign key | Relationship |
+| Junction table (e.g. ENROLMENT) | Relationship, with its extra columns as relationship properties |
+
+The import happens in **two passes**: first every node is created, then the
+relationships are created between nodes that already exist. A relationship row
+whose `source_id` or `target_id` does not exist must be rejected, because the
+relationship would have nothing to connect.
             """
         )
-        st.markdown("**`CREATE` - always inserts**")
         st.code(
-            "CREATE (s:Student {student_id: 'S001', name: 'Aditi', semester: 4});",
-            language="cypher",
-        )
-        st.markdown("**`MERGE` - match first, create only if nothing matched**")
-        st.code(
-            "MERGE (s:Student {student_id: 'S001'})\nSET s.name = 'Aditi', s.semester = 4;",
-            language="cypher",
-        )
-        st.markdown("**`MATCH` + `MERGE` - connect two existing nodes**")
-        st.code(
-            "MATCH (s:Student {student_id: 'S001'}),\n"
-            "      (c:Course {course_id: 'C101'})\n"
-            "MERGE (s)-[r:ENROLLED_IN]->(c)\n"
-            "SET r.grade = 'A';",
-            language="cypher",
-        )
-        st.markdown("**`LOAD CSV` - reading a file directly inside Neo4j**")
-        st.code(
-            "LOAD CSV WITH HEADERS FROM 'file:///students.csv' AS row\n"
-            "MERGE (s:Student {student_id: row.student_id})\n"
-            "SET s.name = row.name,\n"
-            "    s.semester = toInteger(row.semester);",
-            language="cypher",
+            "nodes.csv\n"
+            "label,id,student_id,name,semester,course_id,credits\n"
+            "Student,S001,S001,Aditi,4,,\n"
+            "Course,C101,,Database Management Systems,,C101,4\n"
+            "\n"
+            "relationships.csv\n"
+            "source_id,type,target_id,grade\n"
+            "S001,ENROLLED_IN,C101,A",
+            language="text",
         )
         st.info(
-            "`LOAD CSV` reads the file from the database server's `import` folder, not "
-            "from your own machine. Values arrive as **text**, which is why numbers need "
-            "`toInteger()` or `toFloat()`. This lab generates plain MERGE statements "
-            "instead, so that the same script also runs in the local simulation engine."
+            "**Duplicate prevention.** Each entity is imported by matching on its "
+            "unique identifier: if an entity with that identifier is already in the "
+            "graph it is updated, otherwise it is created. Importing the same file "
+            "twice therefore leaves one copy of every entity - which you can verify "
+            "yourself in the Data Import tab."
         )
         st.warning(
-            "Use `MATCH` (not `MERGE`) for the endpoints when creating relationships. "
-            "`MERGE` on a mistyped id silently creates an empty phantom node."
+            "Validate the data before importing it. Blank identifiers, duplicated "
+            "identifiers, and relationships that point at entities which do not exist "
+            "are the three faults that most often corrupt a graph."
         )
 
     with tabs[5]:
-        st.subheader("Cypher Basics")
-        examples = [
-            ("CREATE", "Insert new data.", "CREATE (s:Student {student_id: 'S001', name: 'Aditi', semester: 4});"),
-            ("MATCH", "Find an existing pattern.", "MATCH (s:Student)\nRETURN s;"),
-            ("RETURN", "Choose what comes back.", "MATCH (s:Student)\nRETURN s.name, s.semester;"),
-            ("WHERE", "Filter the matched rows.", "MATCH (s:Student)\nWHERE s.semester = 4\nRETURN s.name;"),
-            ("MERGE", "Match or create - the safe import clause.", "MERGE (s:Student {student_id: 'S001'})\nSET s.name = 'Aditi';"),
-            ("SET", "Add or change a property.", "MATCH (s:Student {student_id: 'S001'})\nSET s.semester = 5;"),
-            ("DELETE", "Remove a relationship (or a node with none).", "MATCH (s:Student)-[r:ENROLLED_IN]->(:Course)\nDELETE r;"),
-            ("DETACH DELETE", "Remove a node together with its relationships.", "MATCH (s:Student {student_id: 'S001'})\nDETACH DELETE s;"),
-            ("WITH", "Pass results from one part of a query to the next.", "MATCH (s:Student)-[:ENROLLED_IN]->(c:Course)\nWITH c, count(s) AS enrolled\nWHERE enrolled > 1\nRETURN c.name, enrolled;"),
-            ("ORDER BY", "Sort the rows.", "MATCH (s:Student)\nRETURN s.name, s.semester\nORDER BY s.semester DESC;"),
-            ("LIMIT", "Keep only the first N rows.", "MATCH (s:Student)\nRETURN s.name\nORDER BY s.name\nLIMIT 3;"),
-        ]
-        for clause, description, code in examples:
-            with st.expander("%s - %s" % (clause, description)):
-                st.code(code, language="cypher")
-        st.markdown("**Traversal: the reason the graph exists**")
-        st.code(
-            "// Students who share a course with Aditi\n"
-            "MATCH (a:Student {name: 'Aditi'})-[:ENROLLED_IN]->(c:Course)<-[:ENROLLED_IN]-(b:Student)\n"
-            "RETURN DISTINCT b.name AS classmate, c.name AS shared_course;",
-            language="cypher",
-        )
-
-    with tabs[6]:
         st.subheader("Learning Objectives")
         st.markdown("By the end of the experiment, students should be able to:")
         for index, objective in enumerate(report_generator.LEARNING_OBJECTIVES, start=1):
@@ -661,8 +625,7 @@ def render_simulation() -> None:
             "Schema Designer",
             "Schema Diagram",
             "Data Import",
-            "Neo4j Connection",
-            "Query Console",
+            "Graph Query",
             "Graph View",
             "Logbook",
         ]
@@ -677,32 +640,26 @@ def render_simulation() -> None:
     with tabs[3]:
         render_import_tab()
     with tabs[4]:
-        render_connection_tab()
-    with tabs[5]:
         render_query_tab()
-    with tabs[6]:
+    with tabs[5]:
         render_graph_tab()
-    with tabs[7]:
+    with tabs[6]:
         render_logbook_tab()
 
     # Now that every tab has run, report the graph as it actually stands.
     with status:
         # The execution mode lives in the top bar, so this row carries the
         # numbers that change as the student works instead of repeating it.
-        mode = current_mode()
         stats = active_stats()
         col1, col2, col3, col4 = st.columns(4)
         col1.metric("Domain", st.session_state.domain)
         col2.metric("Node labels", stats["label_count"])
         col3.metric("Nodes in graph", stats["node_count"])
         col4.metric("Relationships", stats["relationship_count"])
-        if mode == SIMULATION_MODE:
-            st.caption(
-                "Running on the in-memory engine. Open the **Neo4j Connection** tab to "
-                "run the same Cypher against a real server."
-            )
-        else:
-            st.caption("Queries and imports run on the connected Neo4j database.")
+        st.caption(
+            "Running on the in-memory simulation engine. Design, import, query and "
+            "analyze the knowledge graph directly in the virtual lab."
+        )
 
 
 # ------------------------------------------------- Tab: Domain & Data
@@ -756,7 +713,7 @@ def render_domain_tab() -> None:
             pd.DataFrame(
                 [
                     {
-                        "Pattern": "(%s)-[:%s]->(%s)" % (rel["source"], rel["type"], rel["target"]),
+                        "Pattern": "%s --[%s]--> %s" % (rel["source"], rel["type"], rel["target"]),
                         "Properties": ", ".join(rel["properties"]) or "-",
                     }
                     for rel in domain["relationships"]
@@ -786,11 +743,6 @@ def render_domain_tab() -> None:
             "above it - that is what the validator checks before an import."
         )
 
-    st.divider()
-    st.subheader("Example Cypher for this domain")
-    for example in domain["queries"][:5]:
-        with st.expander(example["title"]):
-            st.code(example["cypher"], language="cypher")
 
 
 # ---------------------------------------------- Tab: Schema Designer
@@ -898,8 +850,8 @@ def render_schema_designer() -> None:
     st.subheader("Schema designer")
     st.caption(
         "Define the node labels, their properties and unique identifiers, then the "
-        "relationship types that connect them. The diagram and the generated Cypher "
-        "follow whatever you design here."
+        "relationship types that connect them. The diagram, the data import and the "
+        "graph queries all follow whatever you design here."
     )
 
     schema = st.session_state.schema
@@ -971,7 +923,7 @@ def render_schema_designer() -> None:
 
     for rel in list(schema["relationships"]):
         rel_id = rel["_id"]
-        title = "(%s)-[:%s]->(%s)" % (
+        title = "%s --[%s]--> %s" % (
             rel.get("source") or "?",
             rel.get("type") or "?",
             rel.get("target") or "?",
@@ -1094,7 +1046,7 @@ def render_schema_graph() -> None:
             pd.DataFrame(
                 [
                     {
-                        "Pattern": "(%s)-[:%s]->(%s)" % (r.get("source"), r.get("type"), r.get("target")),
+                        "Pattern": "%s --[%s]--> %s" % (r.get("source"), r.get("type"), r.get("target")),
                         "Properties": ", ".join(r.get("properties", [])) or "-",
                     }
                     for r in schema["relationships"]
@@ -1223,80 +1175,30 @@ def render_import_tab() -> None:
                 _bullet_block("%d warning(s)" % len(report["warnings"]), report["warnings"])
             )
 
-    # ---- Cypher generator ------------------------------------------
-    st.divider()
-    st.subheader("Step 3 — Generate the Cypher")
-    col1, col2 = st.columns(2)
-    use_merge = col1.checkbox(
-        "Use MERGE instead of CREATE (recommended - prevents duplicates)", value=True
-    )
-    include_constraints = col2.checkbox(
-        "Include uniqueness constraints (Neo4j only)", value=False
-    )
-    if include_constraints and not service().is_connected:
-        st.caption(
-            "Constraints are a Neo4j feature. The local simulation engine skips them "
-            "and relies on MERGE to keep entities unique."
-        )
-
-    col1, col2, col3 = st.columns(3)
-    if col1.button("Generate Cypher", type="primary"):
-        st.session_state.generated_cypher = schema_tools.generate_cypher(
-            st.session_state.schema,
-            dataset,
-            use_merge=use_merge,
-            include_constraints=include_constraints,
-        )
-    if col2.button("Clear Cypher"):
-        st.session_state.generated_cypher = ""
-    if st.session_state.generated_cypher:
-        col3.download_button(
-            "Download .cypher",
-            data=st.session_state.generated_cypher.encode("utf-8"),
-            file_name="import_%s.cypher" % st.session_state.domain.lower().replace(" ", "_"),
-            mime="text/plain",
-        )
-
-    if st.session_state.generated_cypher:
-        st.caption(
-            "Use the copy button in the top-right corner of the code block to copy the script."
-        )
-        st.code(st.session_state.generated_cypher, language="cypher")
-    else:
-        examples = schema_tools.sample_statements(st.session_state.schema, dataset)
-        if examples:
-            st.caption("Press **Generate Cypher** to build the full script. It will look like this:")
-            for name, code in examples.items():
-                st.code(code, language="cypher")
-
     # ---- run the import --------------------------------------------
     st.divider()
-    st.subheader("Step 4 — Import into the graph")
-    mode = current_mode()
+    st.subheader("Step 3 — Import into the graph")
     st.caption(
-        "Target: %s"
-        % (
-            "Neo4j database '%s'" % service().database
-            if mode == NEO4J_MODE
-            else "Local Simulation (in-memory graph)"
-        )
+        "The data is written into the in-memory simulation graph of this laboratory."
+    )
+    prevent_duplicates = st.checkbox(
+        "Prevent duplicate entities (match each entity on its unique identifier)",
+        value=True,
+        key="opt_prevent_duplicates",
+        help=(
+            "When enabled, importing the same data twice updates the existing "
+            "entities instead of creating a second copy of each of them."
+        ),
     )
 
     col1, col2 = st.columns([1, 1])
     with col1:
-        if st.button("Import into %s" % mode, type="primary", key="do_import"):
-            _run_import(mode)
+        if st.button("Import into the graph", type="primary", key="do_import"):
+            _run_import(prevent_duplicates)
     with col2:
         if st.button("Clear the imported graph", key="clear_graph"):
-            if mode == NEO4J_MODE:
-                result = service().clear_database()
-                if result.ok:
-                    st.success("The Neo4j database was cleared.")
-                else:
-                    st.error(result.error)
-            else:
-                st.session_state.graph = InMemoryGraph()
-                st.success("The local simulation graph was cleared.")
+            st.session_state.graph = InMemoryGraph()
+            st.success("The simulation graph was cleared.")
             st.session_state.import_status = "Cleared"
             st.session_state.import_done = False
 
@@ -1305,12 +1207,16 @@ def render_import_tab() -> None:
         col1, col2, col3 = st.columns(3)
         col1.metric("Nodes imported", summary.get("nodes_created", 0))
         col2.metric("Relationships imported", summary.get("relationships_created", 0))
-        col3.metric("Statements executed", summary.get("statements", 0))
+        col3.metric("Properties set", summary.get("properties_set", 0))
         st.caption("Status: %s" % st.session_state.import_status)
 
 
-def _run_import(mode: str) -> None:
-    """Validate, generate if needed, then execute the import script."""
+def _run_import(prevent_duplicates: bool = True) -> None:
+    """Validate the schema and data, then load the dataset into the graph.
+
+    The loading statements are produced internally by schema_tools and executed
+    by the simulation engine; they are never shown to the student.
+    """
     dataset = st.session_state.dataset
     schema = st.session_state.schema
 
@@ -1330,268 +1236,307 @@ def _run_import(mode: str) -> None:
         )
         return
 
-    script = st.session_state.generated_cypher
-    if not script.strip():
-        script = schema_tools.generate_cypher(schema, dataset, use_merge=True)
-        st.session_state.generated_cypher = script
+    script = schema_tools.generate_cypher(schema, dataset, use_merge=prevent_duplicates)
+    st.session_state.generated_cypher = script
 
     started = time.perf_counter()
-    if mode == NEO4J_MODE:
-        totals, errors = service().run_script(script)
-    else:
-        graph, totals, errors = schema_tools.build_local_graph(script, st.session_state.graph)
-        st.session_state.graph = graph
+    graph, totals, errors = schema_tools.build_local_graph(script, st.session_state.graph)
+    st.session_state.graph = graph
     elapsed = (time.perf_counter() - started) * 1000
 
     st.session_state.import_summary = totals
     if errors:
-        st.session_state.import_status = "Imported with %d error(s) (%s)" % (len(errors), mode)
-        st.warning("%d statement(s) failed. The rest were imported." % len(errors))
-        with st.expander("Show the failed statements"):
-            for message in errors[:20]:
-                st.code(message, language="text")
+        st.session_state.import_status = "Imported with %d error(s)" % len(errors)
+        st.warning(
+            "%d record(s) could not be imported. The remaining data was imported."
+            % len(errors)
+        )
     else:
-        st.session_state.import_status = "Imported successfully (%s)" % mode
+        st.session_state.import_status = "Imported successfully (Local Simulation)"
         st.success(
             "Import finished in %.0f ms - nodes imported: %d, relationships imported: %d."
             % (elapsed, totals.get("nodes_created", 0), totals.get("relationships_created", 0))
         )
-        skipped = totals.get("schema_commands_skipped", 0)
-        if skipped:
-            st.info(
-                "%d constraint statement(s) were skipped: constraints are enforced by a "
-                "real Neo4j server, and the local engine relies on MERGE instead." % skipped
-            )
         if totals.get("nodes_created", 0) == 0 and totals.get("relationships_created", 0) == 0:
             st.info(
-                "Nothing new was created because MERGE found every entity already in the "
-                "graph - that is exactly the duplicate prevention you are testing."
+                "Nothing new was created because every entity in the dataset was already "
+                "present in the graph - that is exactly the duplicate prevention you are "
+                "testing."
             )
     st.session_state.import_done = True
 
 
-# --------------------------------------------- Tab: Neo4j Connection
-def _form_credentials() -> Dict[str, str]:
-    return {
-        "uri": st.session_state.get("n4j_uri", ""),
-        "username": st.session_state.get("n4j_user", ""),
-        "password": st.session_state.get("n4j_pwd", ""),
-        "database": st.session_state.get("n4j_db", ""),
-    }
+# -------------------------------------------------- Tab: Graph Query
+# The student composes a question from the schema of the graph. The statement
+# handed to the simulation engine is built here and is never displayed: the
+# engine's query language is an internal implementation detail.
+QUERY_KINDS = [
+    "List all entities of a type",
+    "Find entities by property value",
+    "Show relationships of a type",
+    "Show the connections of one entity",
+    "Count entities of each type",
+]
+
+OPERATORS = {
+    "is equal to": "=",
+    "is not equal to": "<>",
+    "is greater than": ">",
+    "is less than": "<",
+    "contains": "CONTAINS",
+    "starts with": "STARTS WITH",
+}
 
 
-def _test_connection() -> None:
-    credentials = _form_credentials()
-    ok, message = service().test_connection(**credentials)
-    st.session_state.connection_ok = ok
-    st.session_state.connection_message = message
+def _literal(value: str) -> str:
+    """Quote a value for the engine, keeping numbers numeric."""
+    text = (value or "").strip()
+    try:
+        return str(int(text))
+    except ValueError:
+        pass
+    try:
+        return str(float(text))
+    except ValueError:
+        pass
+    return "'%s'" % text.replace("\\", "\\\\").replace("'", "\\'")
 
 
-def _connect_neo4j() -> None:
-    credentials = _form_credentials()
-    ok, message = service().connect(**credentials)
-    st.session_state.connection_ok = ok
-    st.session_state.connection_message = message
+def _properties_of(label: str) -> List[str]:
+    """Property names of a label, from the graph itself."""
+    names: List[str] = []
+    for node in st.session_state.graph.find_nodes([label]):
+        for key in node.properties:
+            if key not in names:
+                names.append(key)
+    return names
 
 
-def _disconnect_neo4j() -> None:
-    service().disconnect()
-    st.session_state.connection_ok = None
-    st.session_state.connection_message = (
-        "Disconnected. The lab is back in Local Simulation Mode."
+def _entity_rows(nodes: List[Any]) -> pd.DataFrame:
+    rows = []
+    for node in nodes:
+        row = {"Entity type": node.label}
+        row.update({k: v for k, v in node.properties.items()})
+        rows.append(row)
+    return pd.DataFrame(rows).fillna("").astype(str)
+
+
+def _run_and_report(statement: str, description: str, formatter) -> None:
+    """Execute a built statement, then present the rows in neutral columns."""
+    result = run_graph_query(statement)
+    result.query = description
+    st.session_state.last_result = result
+    remember_query(result)
+    if not result.ok:
+        st.error(
+            "The query could not be completed. Import the dataset in the **Data "
+            "Import** tab and make sure the entity type still exists in the graph."
+        )
+        return
+    frame = formatter(result)
+    st.session_state.last_query_frame = frame
+    st.success(
+        "Query executed successfully - %d result(s) in %.1f ms."
+        % (len(frame), result.execution_ms)
     )
-
-
-def render_connection_tab() -> None:
-    st.subheader("Neo4j connection")
-
-    if not DRIVER_AVAILABLE:
-        st.warning(
-            "The `neo4j` Python driver is not installed in this environment, so only "
-            "Local Simulation Mode is available. Install it with "
-            "`pip install -r requirements.txt`."
+    if frame.empty:
+        st.info(
+            "No results matched. Check the entity type, the property and the value "
+            "you selected."
         )
-
-    defaults = env_defaults()
-    if env_password_present():
-        st.caption(
-            "A password was found in the `NEO4J_PASSWORD` environment variable and has "
-            "been pre-filled."
-        )
-
-    with st.form("neo4j_form"):
-        col1, col2 = st.columns(2)
-        col1.text_input(
-            "Neo4j URI", value=defaults["uri"], placeholder="bolt://localhost:7687", key="n4j_uri"
-        )
-        col2.text_input("Database", value=defaults["database"], placeholder="neo4j", key="n4j_db")
-        col3, col4 = st.columns(2)
-        col3.text_input("Username", value=defaults["username"], placeholder="neo4j", key="n4j_user")
-        col4.text_input(
-            "Password",
-            value=defaults["password"],
-            type="password",
-            key="n4j_pwd",
-            help="The password stays masked; it is never displayed back to you.",
-        )
-        col5, col6, col7 = st.columns(3)
-        col5.form_submit_button("Test Connection", on_click=_test_connection)
-        col6.form_submit_button("Connect", type="primary", on_click=_connect_neo4j)
-        col7.form_submit_button("Disconnect", on_click=_disconnect_neo4j)
-
-    if st.session_state.connection_message:
-        if st.session_state.connection_ok:
-            st.success(st.session_state.connection_message)
-        elif st.session_state.connection_ok is False:
-            st.error(st.session_state.connection_message)
-            st.info(
-                "**Neo4j is not available. The laboratory has switched to Local "
-                "Simulation Mode.** Every step of the experiment still works; the "
-                "Cypher just runs against the in-memory engine instead."
-            )
-        else:
-            st.info(st.session_state.connection_message)
-
-    st.divider()
-    if service().is_connected:
-        st.success("Connected to %s" % service().uri)
-        stats = service().stats()
-        col1, col2, col3 = st.columns(3)
-        col1.metric("Server", service().server_info or "Neo4j")
-        col2.metric("Nodes on server", stats["node_count"])
-        col3.metric("Relationships on server", stats["relationship_count"])
     else:
-        st.info("Not connected. Execution mode: **Local Simulation**.")
-
-    with st.expander("Using environment variables instead of this form"):
-        st.code(
-            "# Windows PowerShell\n"
-            '$env:NEO4J_URI = "bolt://localhost:7687"\n'
-            '$env:NEO4J_USERNAME = "neo4j"\n'
-            '$env:NEO4J_PASSWORD = "your-password"\n'
-            '$env:NEO4J_DATABASE = "neo4j"\n\n'
-            "# macOS / Linux\n"
-            'export NEO4J_URI="bolt://localhost:7687"\n'
-            'export NEO4J_USERNAME="neo4j"\n'
-            'export NEO4J_PASSWORD="your-password"\n'
-            'export NEO4J_DATABASE="neo4j"',
-            language="bash",
+        st.markdown("**Results**")
+        st.dataframe(frame, width="stretch", hide_index=True)
+        st.download_button(
+            "Download results CSV",
+            data=frame.to_csv(index=False).encode("utf-8"),
+            file_name="graph_query_results.csv",
+            mime="text/csv",
         )
-        st.caption("Set them before starting Streamlit; the form picks them up automatically.")
-
-
-# ------------------------------------------------ Tab: Query Console
-def _set_query(text: str) -> None:
-    """Replace the editor contents.
-
-    The editor key carries a version number: bumping it makes Streamlit build a
-    fresh widget seeded from ``value=``. Writing to a live widget's own key does
-    not update the box in the browser, even though the server value changes.
-    """
-    st.session_state.query_text = text
-    st.session_state.query_nonce = st.session_state.get("query_nonce", 0) + 1
-
-
-def _load_example_query() -> None:
-    domain = domains.get_domain(st.session_state.domain)
-    choice = st.session_state.get("example_query_choice")
-    for example in domain["queries"]:
-        if example["title"] == choice:
-            _set_query(example["cypher"])
-            return
-
-
-def _clear_query() -> None:
-    _set_query("")
-    st.session_state.last_result = None
 
 
 def render_query_tab() -> None:
-    st.subheader("Cypher query console")
-    mode = current_mode()
-    if mode == SIMULATION_MODE:
-        st.caption("Queries run on the in-memory engine (Local Simulation).")
-        with st.expander("Which Cypher does the local engine support?"):
-            st.markdown(
-                "`MATCH`, `OPTIONAL MATCH`, `WHERE`, `CREATE`, `MERGE`, `SET`, "
-                "`DELETE`, `DETACH DELETE`, `WITH`, `UNWIND`, `RETURN` (with "
-                "`DISTINCT` and `count` / `collect` / `sum` / `avg` / `min` / `max`), "
-                "`ORDER BY`, `SKIP`, `LIMIT`, and variable-length patterns such as "
-                "`-[:ENROLLED_IN*1..3]->`.\n\n"
-                "Anything outside this subset is reported as a message. Connect a real "
-                "Neo4j server to run the full language."
-            )
-    else:
-        st.caption("Queries run on the connected Neo4j database.")
-
-    domain = domains.get_domain(st.session_state.domain)
-    titles = [example["title"] for example in domain["queries"]]
-    st.selectbox("Example queries for this domain", titles, key="example_query_choice")
-    st.button("Load this example", on_click=_load_example_query)
-
-    editor_key = "query_editor_%d" % st.session_state.get("query_nonce", 0)
-    typed = st.text_area(
-        "Cypher query", value=st.session_state.query_text, key=editor_key, height=160
+    st.subheader("Graph Query")
+    st.caption(
+        "Ask questions of the knowledge graph you imported. Queries are executed by "
+        "the built-in simulation engine."
     )
-    # Keep the plain session key in step with whatever is in the box.
-    st.session_state.query_text = typed
 
-    col1, col2, col3 = st.columns([1, 1, 3])
-    run = col1.button("Run query", type="primary")
-    col2.button("Clear", on_click=_clear_query)
+    graph: InMemoryGraph = st.session_state.graph
+    labels = graph.labels()
+    rel_types = graph.rel_types()
+    if not labels:
+        st.info(
+            "The graph is empty. Open the **Data Import** tab, validate the dataset "
+            "and import it, then return here."
+        )
+        return
 
-    if run:
-        query = st.session_state.query_text
-        if not query.strip():
-            st.error("The query is empty. Type a Cypher statement first.")
-        else:
-            result = run_cypher(query)
-            result.query = query
-            st.session_state.last_result = result
-            remember_query(result)
+    kind = st.selectbox("Question", QUERY_KINDS, key="query_kind")
 
-    result: Optional[QueryResult] = st.session_state.last_result
-    if result is not None:
-        st.divider()
-        if result.ok:
-            st.success(
-                "Query executed successfully in %s mode - %d record(s) in %.1f ms."
-                % (result.mode, result.record_count, result.execution_ms)
+    # ---- List all entities of a type --------------------------------
+    if kind == QUERY_KINDS[0]:
+        label = st.selectbox("Entity type", labels, key="q_list_label")
+        if st.button("Execute Query", type="primary", key="q_list_run"):
+            _run_and_report(
+                "MATCH (n:%s) RETURN n" % label,
+                "List all %s entities" % label,
+                lambda r: _entity_rows([row[0] for row in r.rows]),
             )
-            col1, col2, col3 = st.columns(3)
-            col1.metric("Records", result.record_count)
-            col2.metric("Execution time", "%.1f ms" % result.execution_ms)
-            col3.metric("Mode", result.mode)
-            if result.notice:
-                st.info(result.notice)
-            elif result.summary:
-                st.info("Write summary - %s" % result.summary_text())
-            frame = result.to_dataframe()
-            if frame.empty:
-                st.info(
-                    "The query ran but returned no rows. Check the labels, property "
-                    "values and relationship directions in your pattern."
-                )
+
+    # ---- Find entities by property value -----------------------------
+    elif kind == QUERY_KINDS[1]:
+        col1, col2 = st.columns(2)
+        label = col1.selectbox("Entity type", labels, key="q_filter_label")
+        properties = _properties_of(label)
+        prop = col2.selectbox(
+            "Property", properties or ["(no properties)"], key="q_filter_prop"
+        )
+        col3, col4 = st.columns(2)
+        operator = col3.selectbox("Condition", list(OPERATORS), key="q_filter_op")
+        value = col4.text_input("Value", key="q_filter_value")
+        if st.button("Execute Query", type="primary", key="q_filter_run"):
+            if not properties:
+                st.error("This entity type has no properties to filter on.")
+            elif not value.strip():
+                st.error("Enter a value to compare with.")
             else:
-                st.dataframe(frame, width="stretch", hide_index=True)
-                st.download_button(
-                    "Download results CSV",
-                    data=frame.to_csv(index=False).encode("utf-8"),
-                    file_name="query_results.csv",
-                    mime="text/csv",
+                statement = "MATCH (n:%s) WHERE n.%s %s %s RETURN n" % (
+                    label,
+                    prop,
+                    OPERATORS[operator],
+                    _literal(value),
                 )
-        else:
-            st.error("Query failed: %s" % result.error)
-            st.caption(
-                "Nothing was changed in the graph. Fix the statement and run it again."
+                _run_and_report(
+                    statement,
+                    "Find %s entities where %s %s %s" % (label, prop, operator, value),
+                    lambda r: _entity_rows([row[0] for row in r.rows]),
+                )
+
+    # ---- Show relationships of a type --------------------------------
+    elif kind == QUERY_KINDS[2]:
+        if not rel_types:
+            st.info("The graph has no relationships yet.")
+            return
+        rtype = st.selectbox("Relationship type", rel_types, key="q_rel_type")
+        if st.button("Execute Query", type="primary", key="q_rel_run"):
+
+            def relationship_rows(result: QueryResult) -> pd.DataFrame:
+                rows = []
+                for source, rel, target in result.rows:
+                    row = {
+                        "Source": source.caption(),
+                        "Source type": source.label,
+                        "Relationship": rel.rtype,
+                        "Target": target.caption(),
+                        "Target type": target.label,
+                    }
+                    row.update(rel.properties)
+                    rows.append(row)
+                return pd.DataFrame(rows).fillna("").astype(str)
+
+            _run_and_report(
+                "MATCH (a)-[r:%s]->(b) RETURN a, r, b" % rtype,
+                "Show all %s relationships" % rtype,
+                relationship_rows,
             )
+
+    # ---- Show the connections of one entity ---------------------------
+    elif kind == QUERY_KINDS[3]:
+        col1, col2 = st.columns(2)
+        label = col1.selectbox("Entity type", labels, key="q_conn_label")
+        nodes = graph.find_nodes([label])
+        captions = sorted({node.caption() for node in nodes})
+        chosen = col2.selectbox(
+            "Entity", captions or ["(no entities)"], key="q_conn_entity"
+        )
+        if st.button("Execute Query", type="primary", key="q_conn_run"):
+            node = next((n for n in nodes if n.caption() == chosen), None)
+            if node is None:
+                st.error("Select an entity to inspect.")
+            else:
+                key_property = next(
+                    (k for k in node.properties if k.endswith("_id") or k == "id"), None
+                )
+                if key_property:
+                    pattern = "(a:%s {%s: %s})" % (
+                        label,
+                        key_property,
+                        _literal(str(node.properties[key_property])),
+                    )
+                else:
+                    pattern = "(a:%s)" % label
+                statement = "MATCH %s-[r]-(b) RETURN r, b, a" % pattern
+
+                def connection_rows(result: QueryResult) -> pd.DataFrame:
+                    rows = []
+                    for rel, other, origin in result.rows:
+                        outgoing = rel.start == origin.nid
+                        rows.append(
+                            {
+                                "Direction": "outgoing" if outgoing else "incoming",
+                                "Relationship": rel.rtype,
+                                "Connected entity": other.caption(),
+                                "Entity type": other.label,
+                            }
+                        )
+                    return pd.DataFrame(rows).fillna("").astype(str)
+
+                _run_and_report(
+                    statement,
+                    "Show the connections of %s (%s)" % (chosen, label),
+                    connection_rows,
+                )
+
+    # ---- Count entities of each type ----------------------------------
+    else:
+        if st.button("Execute Query", type="primary", key="q_count_run"):
+            counts = []
+            total_ms = 0.0
+            failed = False
+            for label in labels:
+                result = run_graph_query("MATCH (n:%s) RETURN count(n) AS total" % label)
+                total_ms += result.execution_ms
+                if not result.ok:
+                    failed = True
+                    break
+                counts.append({"Entity type": label, "Entities": result.rows[0][0]})
+            summary = QueryResult(
+                columns=["Entity type", "Entities"],
+                rows=[[c["Entity type"], c["Entities"]] for c in counts],
+                execution_ms=total_ms,
+                mode=SIMULATION_MODE,
+                query="Count the entities of each type",
+                error="count failed" if failed else None,
+            )
+            st.session_state.last_result = summary
+            remember_query(summary)
+            if failed:
+                st.error("The query could not be completed.")
+            else:
+                frame = pd.DataFrame(counts)
+                st.session_state.last_query_frame = frame
+                st.success(
+                    "Query executed successfully - %d result(s) in %.1f ms."
+                    % (len(frame), total_ms)
+                )
+                st.markdown("**Results**")
+                st.dataframe(frame, width="stretch", hide_index=True)
 
     if st.session_state.query_history:
         with st.expander("Query history (%d)" % len(st.session_state.query_history)):
             st.dataframe(
                 pd.DataFrame(st.session_state.query_history)[
-                    ["time", "mode", "ok", "records", "ms", "query"]
-                ],
+                    ["time", "query", "ok", "records", "ms"]
+                ].rename(
+                    columns={
+                        "time": "Time",
+                        "query": "Query",
+                        "ok": "Succeeded",
+                        "records": "Results",
+                        "ms": "Time (ms)",
+                    }
+                ),
                 hide_index=True,
                 width="stretch",
             )
@@ -1702,7 +1647,7 @@ def render_logbook_tab() -> None:
                 "Relationship Types": len({r["type"] for r in schema["relationships"] if r["type"]}),
                 "Nodes": stats["node_count"],
                 "Relationships": stats["relationship_count"],
-                "Cypher Query": last.query if last is not None else "",
+                "Graph Query": last.query if last is not None else "",
                 "Query Result Count": last.record_count if last is not None and last.ok else 0,
                 "Import Status": st.session_state.import_status,
                 "Mode": current_mode(),
@@ -1767,8 +1712,8 @@ def render_logbook_tab() -> None:
 def render_quiz() -> None:
     st.header("Quiz")
     st.caption(
-        "%d multiple-choice questions covering knowledge graphs, Neo4j, Cypher, "
-        "schema design and data import." % len(quiz_bank.QUESTIONS)
+        "%d multiple-choice questions covering knowledge graphs, graph databases, "
+        "schema design, data import and graph analysis." % len(quiz_bank.QUESTIONS)
     )
 
     result = st.session_state.quiz_result

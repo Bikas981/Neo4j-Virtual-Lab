@@ -9,7 +9,8 @@ Every domain ships with a *coherent* package:
 * ``relationships``  -- the relationship types with source/target labels
 * ``data``           -- the sample entities for each label
 * ``edges``          -- the sample relationships (every endpoint really exists)
-* ``queries``        -- example Cypher queries that make sense for the domain
+* ``queries``        -- reference queries kept with each domain (not displayed;
+                       the interface builds its own queries in the Graph Query tab)
 
 The sample data is validated at import time by :func:`validate_domain_data`, so
 a domain can never hand the laboratory an edge that points at a missing node.

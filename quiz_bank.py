@@ -6,6 +6,10 @@ The assessment for Experiment 9.
 Fifteen multiple-choice questions, five at each level (Basic, Intermediate,
 Advanced), each with four options, one correct answer and an explanation that
 teaches rather than just marks.
+
+The questions cover knowledge graph concepts, graph database fundamentals,
+schema design, data import and graph analysis. They are written in general
+terms, without reference to any particular database product or query language.
 """
 
 from __future__ import annotations
@@ -24,171 +28,191 @@ QUESTIONS: List[Dict[str, Any]] = [
         "topic": "Knowledge graph fundamentals",
         "question": "What is a knowledge graph?",
         "options": [
-            "A network of entities connected by meaningful, typed relationships",
-            "A bar chart that shows how much knowledge a system stores",
+            "A chart that shows how much data a system stores",
+            "A network of entities connected by meaningful, named relationships",
             "A table of rows and columns with a primary key",
             "A folder structure used to organise documents",
         ],
-        "answer": 0,
+        "answer": 1,
         "explanation": (
-            "A knowledge graph stores entities (nodes) and the named relationships "
-            "between them. The relationships carry meaning and are stored as first-class "
-            "data, which is what makes connected questions easy to answer."
+            "A knowledge graph stores entities as nodes and the connections between "
+            "them as named, directed relationships. The connections are data in their "
+            "own right, which is what makes connected questions easy to answer."
         ),
     },
     {
         "id": "q02",
         "level": BASIC,
         "topic": "Nodes and labels",
-        "question": "In Neo4j, what is a label used for?",
+        "question": "What is a node label used for?",
         "options": [
-            "To group nodes into a category, such as :Student or :Course",
             "To store the value of a property",
-            "To give a relationship a direction",
-            "To rename the database",
+            "To give a relationship its direction",
+            "To rename the dataset",
+            "To group nodes into a category, such as Student or Course",
         ],
-        "answer": 0,
+        "answer": 3,
         "explanation": (
-            "A label classifies a node. Writing (s:Student) says 'this node is a "
-            "Student'. A node may have more than one label, and labels are what you "
-            "match on in queries such as MATCH (s:Student)."
+            "A label classifies a node: it says what the entity is. Labels are what "
+            "you select on when you ask for 'all Student entities', and one node may "
+            "carry more than one label."
         ),
     },
     {
         "id": "q03",
         "level": BASIC,
         "topic": "Properties",
-        "question": "Which of these is a property in the pattern (s:Student {student_id: 'S001', name: 'Aditi'})?",
+        "question": (
+            "A Student entity is stored with student_id = S001 and name = Aditi. "
+            "Which of these is a property?"
+        ),
         "options": [
-            "name: 'Aditi'",
+            "name = Aditi",
             "Student",
-            "s",
-            "MATCH",
+            "The arrow that connects two entities",
+            "The graph itself",
         ],
         "answer": 0,
         "explanation": (
-            "Properties are the key-value pairs inside the braces. Here student_id and "
-            "name are properties, Student is the label, and s is just the variable that "
-            "lets the rest of the query refer to this node."
+            "Properties are the key-value facts stored on an entity: student_id and "
+            "name are properties. Student is the label that classifies the entity, "
+            "not a property of it."
         ),
     },
     {
         "id": "q04",
         "level": BASIC,
-        "topic": "Cypher basics",
-        "question": "Which Cypher clause reads existing data from the graph?",
-        "options": ["MATCH", "CREATE", "DELETE", "SET"],
-        "answer": 0,
+        "topic": "Relationships",
+        "question": "What does the pattern  Student --[ENROLLED_IN]--> Course  express?",
+        "options": [
+            "A Course that stores a Student as one of its properties",
+            "Two unrelated entities shown side by side",
+            "A directed relationship of type ENROLLED_IN from a Student to a Course",
+            "A junction table linking students and courses",
+        ],
+        "answer": 2,
         "explanation": (
-            "MATCH finds patterns that already exist. CREATE adds new data, SET changes "
-            "properties, and DELETE removes data."
+            "ENROLLED_IN is the relationship type and the arrow gives its direction. "
+            "The relationship is stored with the entities, so following it needs no "
+            "join between tables."
         ),
     },
     {
         "id": "q05",
         "level": BASIC,
-        "topic": "Relationships",
-        "question": "What does the pattern (s:Student)-[:ENROLLED_IN]->(c:Course) express?",
+        "topic": "Graph structure",
+        "question": "Which statement about a relationship in a knowledge graph is correct?",
         "options": [
-            "A directed relationship of type ENROLLED_IN from a Student to a Course",
-            "A Course that contains a Student as a property",
-            "Two unrelated nodes returned side by side",
-            "A join table between students and courses",
+            "It may connect any number of entities at once",
+            "It connects exactly two entities and carries one type and a direction",
+            "It can never store properties of its own",
+            "It is automatically created between entities that share a property value",
         ],
-        "answer": 0,
+        "answer": 1,
         "explanation": (
-            "The arrow shows direction and ENROLLED_IN is the relationship type. The "
-            "relationship is stored on disk, so traversing it does not need a join."
+            "A relationship always joins exactly two entities, carries a single type "
+            "such as TEACHES, and has a direction. It may also carry its own "
+            "properties, such as a grade or a role."
         ),
     },
     # ------------------------- Intermediate -------------------------
     {
         "id": "q06",
         "level": INTERMEDIATE,
-        "topic": "CREATE vs MERGE",
-        "question": "You run the same CREATE (s:Student {student_id: 'S001'}) statement twice. What happens?",
+        "topic": "Duplicate prevention",
+        "question": (
+            "The same dataset is imported twice, and the import always inserts new "
+            "entities without checking what already exists. What is the result?"
+        ),
         "options": [
-            "Two separate Student nodes exist, because CREATE never checks for duplicates",
-            "The second statement is ignored because the id already exists",
-            "The second statement updates the first node",
-            "Neo4j raises an error automatically",
+            "The second import is ignored automatically",
+            "The second import updates the existing entities",
+            "An error stops the second import",
+            "Every entity exists twice, because nothing checked for an existing copy",
         ],
-        "answer": 0,
+        "answer": 3,
         "explanation": (
-            "CREATE always creates. Without a uniqueness constraint nothing stops the "
-            "duplicate, which is exactly why imports use MERGE on the key property "
-            "instead."
+            "An import that always inserts creates a second copy of every entity. "
+            "This is why an import should match each entity on its unique identifier "
+            "and update it when it already exists."
         ),
     },
     {
         "id": "q07",
         "level": INTERMEDIATE,
-        "topic": "Duplicate prevention",
-        "question": "Which statement imports a student without creating a duplicate if it is run again?",
+        "topic": "Unique identifiers",
+        "question": "Why does every entity type need a unique identifier property?",
         "options": [
-            "MERGE (s:Student {student_id: 'S001'}) SET s.name = 'Aditi'",
-            "CREATE (s:Student {student_id: 'S001', name: 'Aditi'})",
-            "MATCH (s:Student {student_id: 'S001'}) RETURN s",
-            "DELETE (s:Student {student_id: 'S001'})",
+            "It distinguishes entities that look alike and lets an import recognise existing ones",
+            "It makes the graph diagram easier to draw",
+            "It is required before any property can be added",
+            "It determines the direction of the relationships",
         ],
         "answer": 0,
         "explanation": (
-            "MERGE matches the pattern first and only creates it when nothing matches. "
-            "Merging on the key property alone and then using SET for the remaining "
-            "properties is the standard idempotent import pattern."
+            "Two students may share a name, so the identifier is what tells them "
+            "apart. The import compares this property to decide whether an entity is "
+            "already present in the graph."
         ),
     },
     {
         "id": "q08",
         "level": INTERMEDIATE,
-        "topic": "WHERE",
-        "question": "What does MATCH (s:Student) WHERE s.semester = 4 RETURN s.name return?",
+        "topic": "Schema design",
+        "question": (
+            "A dataset records the grade a student earned in a course. Where does "
+            "'grade' belong?"
+        ),
         "options": [
-            "The names of the students whose semester property equals 4",
-            "All students, with the semester column set to 4",
-            "The fourth student in the database",
-            "An error, because WHERE cannot follow MATCH",
+            "As a property of the Student entity",
+            "As a property of the Course entity",
+            "As a property of the ENROLLED_IN relationship",
+            "As a separate Grade entity connected to nothing",
         ],
-        "answer": 0,
+        "answer": 2,
         "explanation": (
-            "WHERE filters the rows produced by MATCH. The same filter can also be "
-            "written inline as MATCH (s:Student {semester: 4})."
+            "The grade depends on the student and the course together, so it belongs "
+            "to the relationship that joins them. On either entity alone it would "
+            "break as soon as the student takes a second course."
         ),
     },
     {
         "id": "q09",
         "level": INTERMEDIATE,
-        "topic": "LOAD CSV",
-        "question": "What is LOAD CSV used for in Neo4j?",
+        "topic": "Data import",
+        "question": "Why are entities imported before relationships?",
         "options": [
-            "Reading rows from a CSV file so they can be turned into nodes and relationships",
-            "Exporting the graph to a spreadsheet",
-            "Creating a backup of the database",
-            "Defining node labels automatically from column names",
+            "Because relationships take longer to create",
+            "Because a relationship can only be created between entities that already exist",
+            "Because entities must be sorted alphabetically first",
+            "Because relationships cannot carry properties",
         ],
-        "answer": 0,
+        "answer": 1,
         "explanation": (
-            "LOAD CSV streams rows into a query. Each row is a map, and you still have "
-            "to write the MERGE/CREATE statements that decide which columns become "
-            "labels, properties and relationships."
+            "A relationship connects two existing entities. If the entities have not "
+            "been created yet, there is nothing for the relationship to join, which "
+            "is why the import runs in two passes."
         ),
     },
     {
         "id": "q10",
         "level": INTERMEDIATE,
-        "topic": "Deleting data",
-        "question": "Why does DELETE fail on a node that still has relationships?",
+        "topic": "Data validation",
+        "question": (
+            "A relationship record refers to a source identifier that appears in no "
+            "entity record. What should the import do?"
+        ),
         "options": [
-            "A relationship cannot exist without both of its end nodes, so DETACH DELETE is required",
-            "DELETE only works on relationships, never on nodes",
-            "The node is locked by another transaction",
-            "Neo4j needs the node to be empty of properties first",
+            "Create an empty entity with that identifier and continue",
+            "Import the relationship without a source",
+            "Reject the record and report it, because the relationship has nothing to connect",
+            "Ignore the record silently",
         ],
-        "answer": 0,
+        "answer": 2,
         "explanation": (
-            "Deleting the node would leave dangling relationships, so Neo4j refuses. "
-            "DETACH DELETE removes the node together with every relationship attached "
-            "to it."
+            "The record is invalid and must be reported. Creating an empty entity "
+            "would silently add a meaningless node to the graph, which is harder to "
+            "detect later than an error message."
         ),
     },
     # --------------------------- Advanced ---------------------------
@@ -196,89 +220,101 @@ QUESTIONS: List[Dict[str, Any]] = [
         "id": "q11",
         "level": ADVANCED,
         "topic": "Graph vs relational",
-        "question": "Why does a graph database usually beat a relational database for deeply connected queries?",
+        "question": (
+            "Why does a graph database usually outperform a relational database on "
+            "deeply connected queries?"
+        ),
         "options": [
-            "Relationships are stored with the nodes, so traversal does not need repeated joins",
-            "Graph databases keep the whole dataset in RAM at all times",
-            "Graph databases do not enforce any schema, so queries are shorter",
-            "SQL cannot express relationships at all",
+            "It keeps the entire dataset in memory at all times",
+            "It enforces no schema, so queries are shorter",
+            "Relational databases cannot express relationships",
+            "Each entity stores its own relationships, so a hop is a local step rather than a join",
         ],
-        "answer": 0,
+        "answer": 3,
         "explanation": (
-            "This is index-free adjacency: each node knows its own relationships, so the "
-            "cost of a hop is local. In SQL the same question needs a join per hop, and "
-            "the cost grows with the size of the tables."
+            "Because each node keeps references to its own relationships, the cost of "
+            "one hop does not grow with the size of the dataset. The same question in "
+            "a relational database needs one join per hop over whole tables."
         ),
     },
     {
         "id": "q12",
         "level": ADVANCED,
-        "topic": "Schema design",
-        "question": "A dataset records the grade a student earned in a course. Where does 'grade' belong?",
+        "topic": "Graph traversal",
+        "question": (
+            "Starting at a student, you follow ENROLLED_IN to a course and then "
+            "follow ENROLLED_IN backwards to other students. What have you found?"
+        ),
         "options": [
-            "As a property of the ENROLLED_IN relationship",
-            "As a property of the Student node",
-            "As a property of the Course node",
-            "As a separate Grade node connected to nothing",
+            "The students who share a course with the first student",
+            "The students who are enrolled in no courses",
+            "The courses that have exactly two students",
+            "The faculty members who teach that course",
         ],
         "answer": 0,
         "explanation": (
-            "The grade depends on the student *and* the course together, so it belongs "
-            "to the relationship that joins them. Putting it on either node would be "
-            "wrong as soon as the student takes a second course."
+            "This two-hop traversal goes out to a shared course and back to other "
+            "students, which identifies classmates. Answering the same question with "
+            "tables would require two joins."
         ),
     },
     {
         "id": "q13",
         "level": ADVANCED,
-        "topic": "Graph traversal",
-        "question": "What does MATCH (a:Student)-[:ENROLLED_IN]->(c:Course)<-[:ENROLLED_IN]-(b:Student) RETURN a.name, b.name find?",
+        "topic": "Many-to-many data",
+        "question": "How is a many-to-many association represented in a knowledge graph?",
         "options": [
-            "Pairs of students who share at least one course",
-            "Students who are enrolled in no courses",
-            "Courses with exactly two students",
-            "Students who teach a course",
+            "With a junction entity that must be created for every pair",
+            "Simply as many relationships of the same type between the entities",
+            "By duplicating one of the entities for each association",
+            "By storing a list of identifiers as a property",
         ],
-        "answer": 0,
+        "answer": 1,
         "explanation": (
-            "The pattern hops out to a course and back in, so a and b are classmates. "
-            "Adding WHERE a.student_id < b.student_id removes the mirrored duplicates."
+            "A student may have many ENROLLED_IN relationships and a course may "
+            "receive many, so the association needs no extra structure. A relational "
+            "schema would need a junction table for the same data."
         ),
     },
     {
         "id": "q14",
         "level": ADVANCED,
-        "topic": "Data import integrity",
-        "question": "Before importing relationships from a CSV, which check matters most?",
+        "topic": "Graph integrity",
+        "question": (
+            "Why can an entity that still has relationships not simply be deleted?"
+        ),
         "options": [
-            "That every source and target id already exists as a node",
-            "That the file is sorted alphabetically",
-            "That the file has fewer than 1000 rows",
-            "That the relationship types are lowercase",
+            "Because entities can never be removed once imported",
+            "Because its properties must be cleared first",
+            "Because the relationships would be left pointing at something that no longer exists",
+            "Because only relationships may be deleted, never entities",
         ],
-        "answer": 0,
+        "answer": 2,
         "explanation": (
-            "A relationship row that points at a missing id cannot be created. If you "
-            "use MERGE on the endpoints instead of MATCH, a typo silently creates an "
-            "empty phantom node - which is worse than an error."
+            "A relationship needs both of its end entities. Removing one of them would "
+            "leave a dangling connection, so the relationships must be removed "
+            "together with the entity."
         ),
     },
     {
         "id": "q15",
         "level": ADVANCED,
-        "topic": "Uniqueness and constraints",
-        "question": "What is the main effect of CREATE CONSTRAINT FOR (s:Student) REQUIRE s.student_id IS UNIQUE?",
+        "topic": "Schema design",
+        "question": (
+            "A design stores everything as one entity type with properties such as "
+            "type = 'student' and course = 'C101'. What is the main problem?"
+        ),
         "options": [
-            "It rejects a second Student with the same student_id and speeds up lookups on it",
-            "It automatically deletes duplicate students that already exist",
-            "It makes student_id mandatory on every node in the database",
-            "It creates the Student label if it does not exist",
+            "It uses more disk space than necessary",
+            "It cannot store numbers as property values",
+            "The meaning is hidden inside properties, so connections cannot be traversed",
+            "It prevents properties from being added later",
         ],
-        "answer": 0,
+        "answer": 2,
         "explanation": (
-            "A uniqueness constraint enforces the key and is backed by an index, so "
-            "MERGE on student_id becomes both safe and fast. Existing duplicates must "
-            "be cleaned up before the constraint can be created."
+            "Labels and relationship types are what carry meaning in a graph. When "
+            "the connection is only a text value inside a property, nothing can be "
+            "followed, and the graph loses the advantage it was chosen for."
         ),
     },
 ]

@@ -3,10 +3,10 @@ simulation_engine.py
 ====================
 Local, in-memory property-graph engine for the Knowledge Graph Virtual Lab.
 
-This module is what makes the laboratory usable *without* a Neo4j server:
+This module is what stores and queries the knowledge graph of the laboratory:
 
 * :class:`InMemoryGraph` -- stores nodes / relationships / properties in Python.
-* :func:`execute_cypher` -- interprets a useful teaching subset of Cypher.
+* :func:`execute_cypher` -- interprets the query language used internally.
 
 Supported Cypher subset
 -----------------------
