@@ -754,11 +754,6 @@ relationship would have nothing to connect.
 def render_simulation() -> None:
     st.header("Simulation")
 
-    # The status row is reserved here but filled in at the end of the function.
-    # An import or a query runs while a tab below is being drawn, so reading the
-    # counts now would report the graph as it was *before* that action.
-    status = st.container()
-
     tabs = st.tabs(
         [
             "Domain & Data",
@@ -785,21 +780,6 @@ def render_simulation() -> None:
         render_graph_tab()
     with tabs[6]:
         render_logbook_tab()
-
-    # Now that every tab has run, report the graph as it actually stands.
-    with status:
-        # The execution mode lives in the top bar, so this row carries the
-        # numbers that change as the student works instead of repeating it.
-        stats = active_stats()
-        col1, col2, col3, col4 = st.columns(4)
-        col1.metric("Domain", st.session_state.domain)
-        col2.metric("Node labels", stats["label_count"])
-        col3.metric("Nodes in graph", stats["node_count"])
-        col4.metric("Relationships", stats["relationship_count"])
-        st.caption(
-            "Running on the in-memory simulation engine. Design, import, query and "
-            "analyze the knowledge graph directly in the virtual lab."
-        )
 
 
 # ------------------------------------------------- Tab: Domain & Data
@@ -829,6 +809,43 @@ def render_domain_tab() -> None:
     domain = domains.get_domain(st.session_state.domain)
     st.write(domain["description"])
     st.info("**Identifying entities:** " + domain["entity_hint"])
+
+    stats = active_stats()
+    schema_node_count = len(st.session_state.schema.get("nodes", []))
+    col1, col2, col3, col4 = st.columns(4)
+    col1.metric("Domain", st.session_state.domain)
+    col2.metric(
+        "Schema Labels",
+        schema_node_count,
+        help="Node labels defined in this domain schema",
+    )
+    col3.metric(
+        "Nodes in Graph",
+        stats["node_count"],
+        delta="Imported" if stats["node_count"] > 0 else "Pending Import",
+        delta_color="normal" if stats["node_count"] > 0 else "off",
+        help="Nodes created in the active graph engine. Requires data import.",
+    )
+    col4.metric(
+        "Relationships in Graph",
+        stats["relationship_count"],
+        delta="Imported" if stats["relationship_count"] > 0 else "Pending Import",
+        delta_color="normal" if stats["relationship_count"] > 0 else "off",
+        help="Relationships created in the active graph engine. Requires data import.",
+    )
+
+    if stats["node_count"] == 0:
+        st.info(
+            "Note: The graph database is currently empty (0 nodes, 0 relationships) because "
+            "data has not been imported yet. To populate the graph with this domain's dataset, "
+            "go to the **Data Import** tab and click **'Import into the graph'**."
+        )
+    else:
+        st.success(
+            f"Active Graph: {stats['node_count']} nodes and {stats['relationship_count']} "
+            "relationships are currently loaded and ready for querying."
+        )
+    st.divider()
 
     col1, col2 = st.columns(2)
     with col1:
